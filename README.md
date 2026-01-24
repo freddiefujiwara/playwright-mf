@@ -115,6 +115,70 @@ Notes:
 - `details` contains each asset section and its tables.
 - `assetClassRatio` is read from a page script, if present.
 
+## Step 3: Get liability data
+
+After you have `auth.json`, run:
+
+```bash
+node bs-liability.js
+```
+
+What happens:
+
+- The script opens the liability page in headless Chromium.
+- It reads the liability summary and detail tables.
+- It prints a JSON result to **stdout**.
+
+Example output shape:
+
+```json
+{
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "total": {
+    "total_text": "1,234円",
+    "total_yen": 1234
+  },
+  "breakdown": [
+    {
+      "category": "カード",
+      "amount_text": "1,234円",
+      "amount_yen": 1234,
+      "percentage_text": "100%",
+      "percentage": 100
+    }
+  ],
+  "details": [
+    {
+      "id": "liability_det",
+      "category": "負債詳細",
+      "tables": [
+        {
+          "headers": ["金融機関", "残高"],
+          "items": [
+            {
+              "金融機関": "Example Bank",
+              "残高": "1,234円",
+              "残高_yen": 1234
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "breakdown": 1,
+    "sections": 1,
+    "rows": 1
+  }
+}
+```
+
+Notes:
+
+- `total` contains the liability total.
+- `breakdown` is the summary table at the top of the page.
+- `details` contains the detailed liability table with a `残高_yen` helper field.
+
 ## Output files
 
 - The JSON is **printed to the terminal**.
