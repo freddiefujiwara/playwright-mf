@@ -26,7 +26,7 @@ describe('cf.js', () => {
     it('should return the correct auth path', () => {
       const homedir = '/home/user';
       vi.spyOn(os, 'homedir').mockReturnValue(homedir);
-      const { authPath } = getAuthPaths();
+      const { authPath } = getAuthPaths({ env: {} });
       expect(authPath).toBe(path.join(homedir, '.config', 'playwright-mf', 'auth.json'));
     });
   });
@@ -67,7 +67,33 @@ describe('cf.js', () => {
     it('should scrape data successfully', async () => {
       const mockData = {
         timestamp: '2023-01-01T00:00:00.000Z',
-        transactions: [{ content: 'Test Transaction', amount_yen: -1000 }],
+        transactions: [
+          {
+            date: '01/01',
+            content: 'Test Transaction',
+            amount_text: '-1,000円',
+            account: 'Test Bank',
+            category_main: 'Main',
+            category_sub: 'Sub',
+            memo: 'Memo',
+            is_transfer: false,
+          },
+        ],
+      };
+      const expected = {
+        timestamp: '2023-01-01T00:00:00.000Z',
+        transactions: [
+          {
+            date: '01/01',
+            content: 'Test Transaction',
+            amount_yen: -1000,
+            account: 'Test Bank',
+            category_main: 'Main',
+            category_sub: 'Sub',
+            memo: 'Memo',
+            is_transfer: false,
+          },
+        ],
       };
       mockPage.evaluate.mockResolvedValue(mockData);
 
@@ -76,10 +102,14 @@ describe('cf.js', () => {
       expect(launchSpy).toHaveBeenCalledWith({ headless: true });
       expect(mockBrowser.newContext).toHaveBeenCalled();
       expect(mockContext.newPage).toHaveBeenCalled();
-      expect(mockPage.goto).toHaveBeenCalledWith('https://moneyforward.com/cf', { waitUntil: 'networkidle' });
+      expect(mockPage.goto).toHaveBeenCalledWith('https://moneyforward.com/cf', { waitUntil: 'domcontentloaded' });
       expect(mockPage.waitForSelector).toHaveBeenCalledWith('#cf-detail-table', { timeout: 30000 });
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        '#cf-detail-table tbody.list_body tr.transaction_list',
+        { timeout: 30000 }
+      );
       expect(mockPage.evaluate).toHaveBeenCalled();
-      expect(console.log).toHaveBeenCalledWith(JSON.stringify(mockData, null, 2));
+      expect(console.log).toHaveBeenCalledWith(JSON.stringify(expected, null, 2));
       expect(console.error).toHaveBeenCalledWith('Accessing transactions page...');
       expect(console.error).toHaveBeenCalledWith(`Scraping complete: Extracted ${mockData.transactions.length} transactions.`);
       expect(mockBrowser.close).toHaveBeenCalled();

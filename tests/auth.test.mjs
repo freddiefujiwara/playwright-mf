@@ -9,7 +9,7 @@ describe("auth helpers", () => {
     const fakeHomedir = () => "/home/tester";
     const join = (...parts) => parts.join("/");
 
-    const paths = getAuthPaths({ homedir: fakeHomedir, join });
+    const paths = getAuthPaths({ homedir: fakeHomedir, join, env: {} });
 
     expect(paths).toEqual({
       authDir: "/home/tester/.config/playwright-mf",
@@ -96,7 +96,8 @@ describe("runAuthFlow", () => {
     expect(browser.newContext).toHaveBeenCalled();
     expect(context.newPage).toHaveBeenCalled();
     expect(page.goto).toHaveBeenCalledWith(
-      "https://moneyforward.com/users/sign_in"
+      "https://moneyforward.com/users/sign_in",
+      { waitUntil: "domcontentloaded" }
     );
     expect(logger.log).toHaveBeenCalledWith(
       "Please complete the login process in the browser."

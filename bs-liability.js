@@ -14,15 +14,24 @@ const { chromium } = require("playwright-extra");
 const path = require("path");
 const os = require("os");
 const stealth = require("puppeteer-extra-plugin-stealth")();
+const {
+  normalizeWhitespace,
+  parsePercent,
+  parseTableData,
+  parseYen,
+  pickFirst,
+} = require("./lib/scrape-utils");
 
 const getAuthPaths = ({
   homedir = os.homedir,
   join = path.join,
+  env = process.env,
 } = {}) => {
-  const authDir = join(homedir(), ".config", "playwright-mf");
+  const defaultAuthDir = join(homedir(), ".config", "playwright-mf");
+  const authDir = env.PLAYWRIGHT_MF_AUTH_DIR ?? defaultAuthDir;
   return {
     authDir,
-    authPath: join(authDir, "auth.json"),
+    authPath: env.PLAYWRIGHT_MF_AUTH_PATH ?? join(authDir, "auth.json"),
   };
 };
 
@@ -33,6 +42,74 @@ const buildContextOptions = (authPath) => ({
 
 const registerStealth = (chromiumModule = chromium, plugin = stealth) => {
   chromiumModule.use(plugin);
+};
+
+const normalizeLiabilityResult = (raw) => {
+  const totalText = pickFirst(
+    normalizeWhitespace(raw.total?.total_text),
+    /負債総額：\s*([0-9,]+円)/
+  );
+  const total = {
+    total_text: totalText,
+    total_yen: parseYen(totalText),
+  };
+
+  const breakdown = raw.breakdown
+    .map((row) => {
+      const category = normalizeWhitespace(row.category);
+      if (!category) return null;
+      const amountText = normalizeWhitespace(row.amount_text);
+      const percentageText = normalizeWhitespace(row.percentage_text);
+      return {
+        category,
+        amount_text: amountText,
+        amount_yen: parseYen(amountText),
+        percentage_text: percentageText,
+        percentage: parsePercent(percentageText),
+      };
+    })
+    .filter(Boolean);
+
+  const details = raw.details.map((detail) => {
+    const tables = detail.tables.map((table) => {
+      const parsed = parseTableData({
+        headers: table.headers,
+        rows: table.rows,
+      });
+      const items = parsed.items.map((row) => {
+        const balanceText = row["残高"] ?? row["col_3"] ?? "";
+        return {
+          ...row,
+          残高_yen: parseYen(balanceText),
+        };
+      });
+      return { ...parsed, items };
+    });
+
+    return {
+      id: detail.id,
+      category: normalizeWhitespace(detail.category) || "負債詳細",
+      tables,
+    };
+  });
+
+  const meta = {
+    breakdown: breakdown.length,
+    sections: details.length,
+    rows: details.reduce(
+      (acc, section) =>
+        acc + section.tables.reduce((sum, table) => sum + table.items.length, 0),
+      0
+    ),
+  };
+
+  return {
+    timestamp: raw.timestamp,
+    total,
+    breakdown,
+    details,
+    meta,
+  };
 };
 
 const runLiabilityScrape = async ({
@@ -63,74 +140,29 @@ const runLiabilityScrape = async ({
     await page.waitForSelector("#liability_det table.table-det", {
       timeout: 30000,
     });
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll(
+          "#bs-liability .liability-summary table.table-bordered tbody tr"
+        ).length > 0,
+      { timeout: 30000 }
+    );
 
-    const result = await page.evaluate(() => {
-      const norm = (s) =>
-        (s ?? "")
-          .replace(/\u00a0/g, " ")
-          .replace(/[ \t]+/g, " ")
-          .replace(/\r?\n+/g, "\n")
-          .trim();
-
-      const parseYen = (s) => {
-        const t = norm(s).replace(/円/g, "").replace(/,/g, "");
-        if (!t) return null;
-        const n = Number(t);
-        return Number.isFinite(n) ? n : null;
-      };
-
-      const parsePercent = (s) => {
-        const t = norm(s).replace(/%/g, "");
-        if (!t) return null;
-        const n = Number(t);
-        return Number.isFinite(n) ? n : null;
-      };
-
-      const pickFirst = (str, re) => {
-        const m = (str || "").match(re);
-        return m ? m[1] : "";
-      };
-
-      const parseTable = (table) => {
-        const actionHeaders = new Set(["変更", "削除"]);
-        let headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
-          norm(th.innerText)
-        );
-
-        // Fallback for cases where thead is missing/empty (estimate from td count in the first tbody row)
-        if (!headers.length) {
-          const colCount =
-            table.querySelectorAll("tbody tr:first-child td").length || 0;
-          headers = Array.from({ length: colCount }, (_, i) => `col_${i + 1}`);
-        }
-
-        const keepIdx = headers
-          .map((h, i) => ({ h, i }))
-          .filter(({ h }) => !actionHeaders.has(h))
-          .map(({ i }) => i);
-
-        const items = [];
-        table.querySelectorAll("tbody tr").forEach((tr) => {
-          const tds = Array.from(tr.querySelectorAll("td")).map((td) =>
-            norm(td.innerText)
-          );
-          if (!tds.some((v) => v !== "")) return;
-
-          const row = {};
-          keepIdx.forEach((i) => {
-            row[headers[i] ?? `col_${i + 1}`] = tds[i] ?? "";
-          });
-          items.push(row);
-        });
-
-        return { headers: keepIdx.map((i) => headers[i]), items };
-      };
+    const rawResult = await page.evaluate(() => {
+      const text = (node) => node?.innerText ?? "";
+      const parseTable = (table) => ({
+        headers: Array.from(table.querySelectorAll("thead th")).map((th) =>
+          text(th)
+        ),
+        rows: Array.from(table.querySelectorAll("tbody tr")).map((tr) =>
+          Array.from(tr.querySelectorAll("td")).map((td) => text(td))
+        ),
+      });
 
       const data = {
         timestamp: new Date().toISOString(),
         total: {
           total_text: "",
-          total_yen: null,
         },
         breakdown: [],
         details: [],
@@ -142,9 +174,7 @@ const runLiabilityScrape = async ({
       const totalBox = document.querySelector(
         "#bs-liability section.bs-liability .heading-radius-box"
       );
-      const totalText = pickFirst(norm(totalBox?.innerText), /負債総額：\s*([0-9,]+円)/);
-      data.total.total_text = totalText;
-      data.total.total_yen = parseYen(totalText);
+      data.total.total_text = text(totalBox);
 
       // ===== breakdown (Liability Breakdown) =====
       // HTML example: <div class="liability-summary">... <table class="table table-bordered"> <tr> <th>...<a>種類</a> <td>金額</td><td>%</td> </th> </tr>
@@ -155,20 +185,14 @@ const runLiabilityScrape = async ({
         summaryTable.querySelectorAll("tr").forEach((tr) => {
           const th = tr.querySelector("th");
           const tds = tr.querySelectorAll("td");
-          const category =
-            norm(th?.querySelector("a")?.innerText) || norm(th?.innerText);
+          const category = text(th?.querySelector("a")) || text(th);
 
           if (!category) return;
 
-          const amountText = norm(tds[0]?.innerText);
-          const pctText = norm(tds[1]?.innerText);
-
           data.breakdown.push({
             category,
-            amount_text: amountText,
-            amount_yen: parseYen(amountText),
-            percentage_text: pctText,
-            percentage: parsePercent(pctText),
+            amount_text: text(tds[0]),
+            percentage_text: text(tds[1]),
           });
         });
       }
@@ -178,34 +202,18 @@ const runLiabilityScrape = async ({
       const detTable = document.querySelector("#liability_det table.table-det");
       if (detTable) {
         const parsed = parseTable(detTable);
-
-        // As a convenience field, add the balance (in yen) as a numeric value (assuming column name is "残高")
-        const items = parsed.items.map((row) => {
-          const balanceText = row["残高"] ?? row["col_3"] ?? "";
-          return {
-            ...row,
-            残高_yen: parseYen(balanceText),
-          };
-        });
-
         data.details.push({
           id: "liability_det",
-          category: norm(document.querySelector("#liability_det h1.heading-normal")?.innerText) || "負債詳細",
-          tables: [{ ...parsed, items }],
+          category: text(
+            document.querySelector("#liability_det h1.heading-normal")
+          ),
+          tables: [parsed],
         });
       }
-
-      data.meta = {
-        breakdown: data.breakdown.length,
-        sections: data.details.length,
-        rows: data.details.reduce(
-          (a, s) => a + s.tables.reduce((b, t) => b + t.items.length, 0),
-          0
-        ),
-      };
-
       return data;
     });
+
+    const result = normalizeLiabilityResult(rawResult);
 
     logger.log(JSON.stringify(result, null, 2));
 
@@ -229,6 +237,7 @@ if (require.main === module) {
 module.exports = {
   buildContextOptions,
   getAuthPaths,
+  normalizeLiabilityResult,
   registerStealth,
   runLiabilityScrape,
 };
