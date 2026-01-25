@@ -13,10 +13,11 @@ vi.mock("puppeteer-extra-plugin-stealth", () => () => "stealth-plugin");
 
 const { default: portfolio } = await import("../bs-portfolio.js");
 
-const { buildContextOptions, getAuthPaths } = portfolio;
+const { buildContextOptions, getAuthPaths, registerStealth } = portfolio;
 
 describe("bs-portfolio helpers", () => {
   it("registers stealth plugin", () => {
+    registerStealth(chromiumMock, "stealth-plugin");
     expect(chromiumMock.use).toHaveBeenCalledWith("stealth-plugin");
   });
 

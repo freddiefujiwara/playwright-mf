@@ -19,13 +19,16 @@ const buildContextOptions = (authPath) => ({
   viewport: { width: 1280, height: 800 },
 });
 
-chromium.use(stealth);
+const registerStealth = (chromiumModule = chromium, plugin = stealth) => {
+  chromiumModule.use(plugin);
+};
 
 const runPortfolioScrape = async ({
   chromiumModule = chromium,
   authPaths = getAuthPaths(),
   logger = console,
 } = {}) => {
+  registerStealth(chromiumModule, stealth);
   const browser = await chromiumModule.launch({ headless: true });
   const context = await browser.newContext(
     buildContextOptions(authPaths.authPath)
@@ -209,5 +212,6 @@ if (require.main === module) {
 module.exports = {
   buildContextOptions,
   getAuthPaths,
+  registerStealth,
   runPortfolioScrape,
 };

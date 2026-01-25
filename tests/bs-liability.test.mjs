@@ -13,10 +13,11 @@ vi.mock("puppeteer-extra-plugin-stealth", () => () => "stealth-plugin");
 
 const { default: liability } = await import("../bs-liability.js");
 
-const { buildContextOptions, getAuthPaths } = liability;
+const { buildContextOptions, getAuthPaths, registerStealth } = liability;
 
 describe("bs-liability helpers", () => {
   it("registers stealth plugin", () => {
+    registerStealth(chromiumMock, "stealth-plugin");
     expect(chromiumMock.use).toHaveBeenCalledWith("stealth-plugin");
   });
 
