@@ -78,6 +78,9 @@ const runCfScrape = async () => {
   }
 };
 
+/* c8 ignore next 3 */
 if (require.main === module) {
   runCfScrape();
 }
+
+module.exports = { getAuthPaths, registerStealth, runCfScrape };
