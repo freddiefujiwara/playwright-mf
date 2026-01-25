@@ -10,6 +10,7 @@
     "puppeteer-extra-plugin-stealth": "^2.11.2"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^1.6.0",
     "vitest": "^1.6.0"
   },
   "scripts": {

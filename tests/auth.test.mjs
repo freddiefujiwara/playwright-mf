@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import auth from "../auth.js";
 
-const { getAuthPaths, persistAuthState } = auth;
+const { getAuthPaths, persistAuthState, runAuthFlow } = auth;
 
 describe("auth helpers", () => {
   it("builds auth paths from homedir", () => {
@@ -39,5 +39,82 @@ describe("auth helpers", () => {
     expect(logger.log).toHaveBeenCalledWith(
       "認証情報を保存しました: /tmp/auth/auth.json"
     );
+  });
+
+  it("handles errors when persisting auth state", async () => {
+    const context = { storageState: vi.fn() };
+    const fsModule = {
+      mkdirSync: vi.fn().mockImplementation(() => {
+        throw new Error("FS error");
+      }),
+    };
+    const logger = { log: vi.fn(), error: vi.fn() };
+
+    await persistAuthState({
+      context,
+      authDir: "/tmp/auth",
+      authPath: "/tmp/auth/auth.json",
+      fsModule,
+      logger,
+    });
+
+    expect(logger.error).toHaveBeenCalledWith(
+      "auth.json の保存に失敗しました:",
+      expect.any(Error)
+    );
+  });
+});
+
+describe("runAuthFlow", () => {
+  it("should run the auth flow and persist the state", async () => {
+    const page = { goto: vi.fn().mockResolvedValue(undefined) };
+    const context = { newPage: vi.fn().mockResolvedValue(page) };
+    const browser = {
+      newContext: vi.fn().mockResolvedValue(context),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    const chromiumModule = { launch: vi.fn().mockResolvedValue(browser) };
+    const stdin = { resume: vi.fn(), once: vi.fn() };
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const exit = vi.fn();
+    const persistFn = vi.fn().mockResolvedValue(undefined);
+    const authPaths = {
+      authDir: "/tmp/auth",
+      authPath: "/tmp/auth/auth.json",
+    };
+
+    await runAuthFlow({
+      chromiumModule,
+      stdin,
+      logger,
+      exit,
+      authPaths,
+      persistFn,
+    });
+
+    expect(chromiumModule.launch).toHaveBeenCalledWith({ headless: false });
+    expect(browser.newContext).toHaveBeenCalled();
+    expect(context.newPage).toHaveBeenCalled();
+    expect(page.goto).toHaveBeenCalledWith(
+      "https://moneyforward.com/users/sign_in"
+    );
+    expect(logger.log).toHaveBeenCalledWith(
+      "ブラウザでログインを完了させてください。"
+    );
+    expect(stdin.resume).toHaveBeenCalled();
+    expect(stdin.once).toHaveBeenCalledWith("data", expect.any(Function));
+
+    // Manually trigger the stdin 'data' event callback
+    const callback = stdin.once.mock.calls[0][1];
+    await callback();
+
+    expect(persistFn).toHaveBeenCalledWith({
+      context,
+      authDir: authPaths.authDir,
+      authPath: authPaths.authPath,
+      logger,
+    });
+    expect(browser.close).toHaveBeenCalled();
+    expect(exit).toHaveBeenCalled();
   });
 });
