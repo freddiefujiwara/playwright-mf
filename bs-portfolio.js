@@ -36,7 +36,7 @@ const runPortfolioScrape = async ({
   const page = await context.newPage();
 
   try {
-    logger.error("資産ページにアクセス中...");
+    logger.error("Accessing portfolio page...");
     await page.goto("https://moneyforward.com/bs/portfolio", {
       waitUntil: "domcontentloaded",
     });
@@ -190,15 +190,15 @@ const runPortfolioScrape = async ({
       return data;
     });
 
-    // ===== 出力 =====
+    // ===== Output =====
     logger.log(JSON.stringify(result, null, 2));
 
-    logger.error("データ取得完了");
+    logger.error("Data scraping complete");
     logger.error(
       `breakdown=${result.meta.breakdown}, sections=${result.meta.sections}, rows=${result.meta.rows}`
     );
   } catch (error) {
-    logger.error("エラー:", error);
+    logger.error("Error:", error);
     await page.screenshot({ path: "debug-error.png", fullPage: true });
   } finally {
     await browser.close();

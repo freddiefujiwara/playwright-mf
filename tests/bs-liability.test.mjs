@@ -120,7 +120,7 @@ describe("runLiabilityScrape", () => {
       logger,
     });
 
-    expect(logger.error).toHaveBeenCalledWith("エラー:", error);
+    expect(logger.error).toHaveBeenCalledWith("Error:", error);
     expect(page.screenshot).toHaveBeenCalledWith({
       path: "debug-error.png",
       fullPage: true,
