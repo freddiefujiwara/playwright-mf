@@ -37,7 +37,7 @@ describe("auth helpers", () => {
       path: "/tmp/auth/auth.json",
     });
     expect(logger.log).toHaveBeenCalledWith(
-      "認証情報を保存しました: /tmp/auth/auth.json"
+      "Saved authentication data: /tmp/auth/auth.json"
     );
   });
 
@@ -59,7 +59,7 @@ describe("auth helpers", () => {
     });
 
     expect(logger.error).toHaveBeenCalledWith(
-      "auth.json の保存に失敗しました:",
+      "Failed to save auth.json:",
       expect.any(Error)
     );
   });
@@ -99,7 +99,10 @@ describe("runAuthFlow", () => {
       "https://moneyforward.com/users/sign_in"
     );
     expect(logger.log).toHaveBeenCalledWith(
-      "ブラウザでログインを完了させてください。"
+      "Please complete the login process in the browser."
+    );
+    expect(logger.log).toHaveBeenCalledWith(
+      "When you are done, please return to the terminal and press Enter..."
     );
     expect(stdin.resume).toHaveBeenCalled();
     expect(stdin.once).toHaveBeenCalledWith("data", expect.any(Function));

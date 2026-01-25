@@ -24,9 +24,9 @@ const persistAuthState = async ({
   try {
     fsModule.mkdirSync(authDir, { recursive: true });
     await context.storageState({ path: authPath });
-    logger.log(`認証情報を保存しました: ${authPath}`);
+    logger.log(`Saved authentication data: ${authPath}`);
   } catch (err) {
-    logger.error("auth.json の保存に失敗しました:", err);
+    logger.error("Failed to save auth.json:", err);
   }
 };
 
@@ -38,16 +38,16 @@ const runAuthFlow = async ({
   authPaths = getAuthPaths(),
   persistFn = persistAuthState,
 } = {}) => {
-  const browser = await chromiumModule.launch({ headless: false }); // ブラウザを表示
+  const browser = await chromiumModule.launch({ headless: false }); // Show browser
   const context = await browser.newContext();
   const page = await context.newPage();
 
   await page.goto("https://moneyforward.com/users/sign_in");
 
-  logger.log("ブラウザでログインを完了させてください。");
-  logger.log("完了したら、ターミナルに戻って Enter を押してください...");
+  logger.log("Please complete the login process in the browser.");
+  logger.log("When you are done, please return to the terminal and press Enter...");
 
-  // stdin が止まる環境対策
+  // Workaround for environments where stdin stops
   stdin.resume();
 
   stdin.once("data", async () => {
