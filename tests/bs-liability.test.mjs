@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { withDom } from "./helpers/dom.mjs";
 
 const chromiumMock = {
   use: vi.fn(),
@@ -213,20 +214,41 @@ describe("bs-liability helpers", () => {
 
 describe("runLiabilityScrape", () => {
   it("should scrape liability data and log the result", async () => {
-    const mockResult = {
-      timestamp: "2024-01-01T00:00:00.000Z",
-      total: { total_text: "負債総額：1,000円" },
-      breakdown: [
-        {
-          category: "住宅ローン",
-          amount_text: "1,000円",
-          percentage_text: "100%",
-        },
-      ],
-      details: [],
-    };
+    const html = `
+      <section id="bs-liability">
+        <section class="bs-liability">
+          <div class="heading-radius-box">負債総額：1,000円</div>
+        </section>
+        <div class="liability-summary">
+          <section class="bs-total-assets">
+            <table class="table-bordered">
+              <tr>
+                <th><a>住宅ローン</a></th>
+                <td>1,000円</td>
+                <td>100%</td>
+              </tr>
+              <tr>
+                <th> </th>
+                <td>0円</td>
+                <td>0%</td>
+              </tr>
+            </table>
+          </section>
+        </div>
+      </section>
+      <section id="liability_det">
+        <h1 class="heading-normal">負債詳細</h1>
+        <table class="table-det">
+          <thead>
+            <tr><th>種類</th><th>残高</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>住宅ローン</td><td>1,000円</td></tr>
+          </tbody>
+        </table>
+      </section>
+    `;
     const expected = {
-      timestamp: "2024-01-01T00:00:00.000Z",
       total: { total_text: "1,000円", total_yen: 1000 },
       breakdown: [
         {
@@ -237,15 +259,32 @@ describe("runLiabilityScrape", () => {
           percentage: 100,
         },
       ],
-      details: [],
-      meta: { breakdown: 1, sections: 0, rows: 0 },
+      details: [
+        {
+          id: "liability_det",
+          category: "負債詳細",
+          tables: [
+            {
+              headers: ["種類", "残高"],
+              items: [
+                {
+                  種類: "住宅ローン",
+                  残高: "1,000円",
+                  残高_yen: 1000,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      meta: { breakdown: 1, sections: 1, rows: 1 },
     };
 
     const page = {
       goto: vi.fn().mockResolvedValue(undefined),
       waitForSelector: vi.fn().mockResolvedValue(undefined),
-      waitForFunction: vi.fn().mockResolvedValue(undefined),
-      evaluate: vi.fn().mockResolvedValue(mockResult),
+      waitForFunction: vi.fn().mockImplementation((fn) => withDom(html, () => fn())),
+      evaluate: vi.fn().mockImplementation((fn) => withDom(html, () => fn())),
       screenshot: vi.fn().mockResolvedValue(undefined),
     };
     const context = { newPage: vi.fn().mockResolvedValue(page) };
@@ -274,9 +313,49 @@ describe("runLiabilityScrape", () => {
     expect(page.waitForSelector).toHaveBeenCalledTimes(3);
     expect(page.waitForFunction).toHaveBeenCalled();
     expect(page.evaluate).toHaveBeenCalled();
-    expect(logger.log).toHaveBeenCalledWith(
-      JSON.stringify(expected, null, 2)
-    );
+    const logged = JSON.parse(logger.log.mock.calls[0][0]);
+    expect(logged.timestamp).toEqual(expect.any(String));
+    expect(logged).toEqual(expect.objectContaining(expected));
+    expect(browser.close).toHaveBeenCalled();
+  });
+
+  it("should handle missing tables gracefully", async () => {
+    const html = `
+      <section id="bs-liability">
+        <section class="bs-liability">
+          <div class="heading-radius-box">負債総額：0円</div>
+        </section>
+      </section>
+    `;
+    const page = {
+      goto: vi.fn().mockResolvedValue(undefined),
+      waitForSelector: vi.fn().mockResolvedValue(undefined),
+      waitForFunction: vi.fn().mockImplementation((fn) => withDom(html, () => fn())),
+      evaluate: vi.fn().mockImplementation((fn) => withDom(html, () => fn())),
+      screenshot: vi.fn().mockResolvedValue(undefined),
+    };
+    const context = { newPage: vi.fn().mockResolvedValue(page) };
+    const browser = {
+      newContext: vi.fn().mockResolvedValue(context),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    chromiumMock.launch.mockResolvedValue(browser);
+
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const authPaths = {
+      authDir: "/tmp/auth",
+      authPath: "/tmp/auth/auth.json",
+    };
+
+    await runLiabilityScrape({
+      chromiumModule: chromiumMock,
+      authPaths,
+      logger,
+    });
+
+    const logged = JSON.parse(logger.log.mock.calls[0][0]);
+    expect(logged.breakdown).toEqual([]);
+    expect(logged.details).toEqual([]);
     expect(browser.close).toHaveBeenCalled();
   });
 

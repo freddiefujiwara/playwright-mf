@@ -4,6 +4,7 @@ import { getAuthPaths, registerStealth, runCfScrape, normalizeCfResult } from '.
 import { chromium } from 'playwright-extra';
 import path from 'path';
 import os from 'os';
+import { withDom } from './helpers/dom.mjs';
 
 // We only need to mock the stealth plugin, as we will spy on chromium methods directly.
 vi.mock('puppeteer-extra-plugin-stealth', () => ({
@@ -172,23 +173,31 @@ describe('cf.js', () => {
     });
 
     it('should scrape data successfully', async () => {
-      const mockData = {
-        timestamp: '2023-01-01T00:00:00.000Z',
-        transactions: [
-          {
-            date: '01/01',
-            content: 'Test Transaction',
-            amount_text: '-1,000円',
-            account: 'Test Bank',
-            category_main: 'Main',
-            category_sub: 'Sub',
-            memo: 'Memo',
-            is_transfer: false,
-          },
-        ],
-      };
+      const html = `
+        <table id="cf-detail-table">
+          <tbody class="list_body">
+            <tr class="transaction_list">
+              <td class="date"><span>01/01</span></td>
+              <td class="content"><div><span>Test Transaction</span></div></td>
+              <td class="amount"><span class="offset">-1,000円</span></td>
+              <td class="note calc" title="Test Bank"></td>
+              <td class="lctg"><span class="v_l_ctg">Main</span></td>
+              <td class="mctg"><span class="v_m_ctg">Sub</span></td>
+              <td class="memo"><span class="noform"><span>Memo</span></span></td>
+            </tr>
+            <tr class="transaction_list mf-grayout">
+              <td class="date"><span>01/02</span></td>
+              <td class="content"><div><span>Transfer</span></div></td>
+              <td class="amount"><span class="offset">-500円</span></td>
+              <td class="note calc" title="Bank A"></td>
+              <td class="lctg"><span class="v_l_ctg">Transfer</span></td>
+              <td class="mctg"><span class="v_m_ctg">Out</span></td>
+              <td class="memo"><span class="noform"><span></span></span></td>
+            </tr>
+          </tbody>
+        </table>
+      `;
       const expected = {
-        timestamp: '2023-01-01T00:00:00.000Z',
         transactions: [
           {
             date: '01/01',
@@ -200,9 +209,19 @@ describe('cf.js', () => {
             memo: 'Memo',
             is_transfer: false,
           },
+          {
+            date: '01/02',
+            content: 'Transfer',
+            amount_yen: -500,
+            account: 'Bank A',
+            category_main: 'Transfer',
+            category_sub: 'Out',
+            memo: '',
+            is_transfer: true,
+          },
         ],
       };
-      mockPage.evaluate.mockResolvedValue(mockData);
+      mockPage.evaluate.mockImplementation((fn) => withDom(html, () => fn()));
 
       await runCfScrape();
 
@@ -216,9 +235,11 @@ describe('cf.js', () => {
         { timeout: 30000 }
       );
       expect(mockPage.evaluate).toHaveBeenCalled();
-      expect(console.log).toHaveBeenCalledWith(JSON.stringify(expected, null, 2));
+      const logged = JSON.parse(console.log.mock.calls[0][0]);
+      expect(logged.timestamp).toEqual(expect.any(String));
+      expect(logged).toEqual(expect.objectContaining(expected));
       expect(console.error).toHaveBeenCalledWith('Accessing transactions page...');
-      expect(console.error).toHaveBeenCalledWith(`Scraping complete: Extracted ${mockData.transactions.length} transactions.`);
+      expect(console.error).toHaveBeenCalledWith(`Scraping complete: Extracted ${expected.transactions.length} transactions.`);
       expect(mockBrowser.close).toHaveBeenCalled();
       expect(mockPage.screenshot).not.toHaveBeenCalled();
     });
