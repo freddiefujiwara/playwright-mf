@@ -20,10 +20,10 @@ const runCfScrape = async () => {
   const page = await context.newPage();
 
   try {
-    console.error("入出金ページにアクセス中...");
+    console.error("Accessing transactions page...");
     await page.goto("https://moneyforward.com/cf", { waitUntil: "networkidle" });
 
-    // 明細テーブルが表示されるまで待機
+    // Wait for the transaction table to be visible
     await page.waitForSelector("#cf-detail-table", { timeout: 30000 });
 
     const result = await page.evaluate(() => {
@@ -38,7 +38,7 @@ const runCfScrape = async () => {
         transactions: []
       };
 
-      // 明細テーブルの行を取得
+      // Get all rows from the transaction table
       const rows = document.querySelectorAll("#cf-detail-table tbody.list_body tr.transaction_list");
 
       rows.forEach(tr => {
@@ -52,14 +52,14 @@ const runCfScrape = async () => {
 
         if (content) {
           data.transactions.push({
-            date,           // 日付 (mm/dd)
-            content,        // 内容
-            amount_yen: parseYen(amountText), // 金額 (数値)
-            account,        // 保有金融機関
-            category_main: lCategory, // 大項目
-            category_sub: sCategory,  // 中項目
-            memo,           // メモ
-            is_transfer: tr.classList.contains("mf-grayout") // 振替かどうか
+            date,           // Date (mm/dd)
+            content,        // Content
+            amount_yen: parseYen(amountText), // Amount (number)
+            account,        // Financial institution
+            category_main: lCategory, // Main category
+            category_sub: sCategory,  // Sub category
+            memo,           // Memo
+            is_transfer: tr.classList.contains("mf-grayout") // Whether it is a transfer
           });
         }
       });
@@ -68,10 +68,10 @@ const runCfScrape = async () => {
     });
 
     console.log(JSON.stringify(result, null, 2));
-    console.error(`取得完了: ${result.transactions.length} 件の明細を抽出しました。`);
+    console.error(`Scraping complete: Extracted ${result.transactions.length} transactions.`);
 
   } catch (error) {
-    console.error("エラーが発生しました:", error);
+    console.error("An error occurred:", error);
     await page.screenshot({ path: "cf-error.png" });
   } finally {
     await browser.close();

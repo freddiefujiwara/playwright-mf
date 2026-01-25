@@ -80,8 +80,8 @@ describe('cf.js', () => {
       expect(mockPage.waitForSelector).toHaveBeenCalledWith('#cf-detail-table', { timeout: 30000 });
       expect(mockPage.evaluate).toHaveBeenCalled();
       expect(console.log).toHaveBeenCalledWith(JSON.stringify(mockData, null, 2));
-      expect(console.error).toHaveBeenCalledWith('入出金ページにアクセス中...');
-      expect(console.error).toHaveBeenCalledWith(`取得完了: ${mockData.transactions.length} 件の明細を抽出しました。`);
+      expect(console.error).toHaveBeenCalledWith('Accessing transactions page...');
+      expect(console.error).toHaveBeenCalledWith(`Scraping complete: Extracted ${mockData.transactions.length} transactions.`);
       expect(mockBrowser.close).toHaveBeenCalled();
       expect(mockPage.screenshot).not.toHaveBeenCalled();
     });
@@ -93,7 +93,7 @@ describe('cf.js', () => {
       await runCfScrape();
 
       expect(launchSpy).toHaveBeenCalled();
-      expect(console.error).toHaveBeenCalledWith('エラーが発生しました:', error);
+      expect(console.error).toHaveBeenCalledWith('An error occurred:', error);
       expect(mockPage.screenshot).toHaveBeenCalledWith({ path: 'cf-error.png' });
       expect(mockBrowser.close).toHaveBeenCalled();
     });
