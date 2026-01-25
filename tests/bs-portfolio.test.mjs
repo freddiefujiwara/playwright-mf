@@ -1,23 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
 
+const chromiumMock = {
+  use: vi.fn(),
+  launch: vi.fn(),
+};
+
 vi.mock("playwright-extra", () => ({
-  chromium: {
-    use: vi.fn(),
-    launch: vi.fn(),
-  },
+  chromium: chromiumMock,
 }));
 
 vi.mock("puppeteer-extra-plugin-stealth", () => () => "stealth-plugin");
 
 const { default: portfolio } = await import("../bs-portfolio.js");
-const playwrightExtra = await import("playwright-extra");
 
 const { buildContextOptions, getAuthPaths } = portfolio;
-const { chromium } = playwrightExtra;
 
 describe("bs-portfolio helpers", () => {
   it("registers stealth plugin", () => {
-    expect(chromium.use).toHaveBeenCalledWith("stealth-plugin");
+    expect(chromiumMock.use).toHaveBeenCalledWith("stealth-plugin");
   });
 
   it("builds auth paths from homedir", () => {
