@@ -1,20 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("playwright-extra", () => ({
-  default: {
-    chromium: {
-      use: vi.fn(),
-      launch: vi.fn(),
-    },
+  chromium: {
+    use: vi.fn(),
+    launch: vi.fn(),
   },
 }));
 
-vi.mock("puppeteer-extra-plugin-stealth", () => ({
-  default: () => "stealth-plugin",
-}));
+vi.mock("puppeteer-extra-plugin-stealth", () => () => "stealth-plugin");
 
 const { default: liability } = await import("../bs-liability.js");
-const { default: playwrightExtra } = await import("playwright-extra");
+const playwrightExtra = await import("playwright-extra");
 
 const { buildContextOptions, getAuthPaths } = liability;
 const { chromium } = playwrightExtra;
