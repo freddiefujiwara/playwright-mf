@@ -14,21 +14,37 @@ const path = require("path");
 const os = require("os");
 const stealth = require("puppeteer-extra-plugin-stealth")();
 
-const authDir = path.join(os.homedir(), ".config", "playwright-mf");
-const authPath = path.join(authDir, "auth.json");
+const getAuthPaths = ({
+  homedir = os.homedir,
+  join = path.join,
+} = {}) => {
+  const authDir = join(homedir(), ".config", "playwright-mf");
+  return {
+    authDir,
+    authPath: join(authDir, "auth.json"),
+  };
+};
+
+const buildContextOptions = (authPath) => ({
+  storageState: authPath,
+  viewport: { width: 1280, height: 800 },
+});
 
 chromium.use(stealth);
 
-(async () => {
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    storageState: authPath,
-    viewport: { width: 1280, height: 800 },
-  });
+const runLiabilityScrape = async ({
+  chromiumModule = chromium,
+  authPaths = getAuthPaths(),
+  logger = console,
+} = {}) => {
+  const browser = await chromiumModule.launch({ headless: true });
+  const context = await browser.newContext(
+    buildContextOptions(authPaths.authPath)
+  );
   const page = await context.newPage();
 
   try {
-    console.error("負債ページにアクセス中...");
+    logger.error("負債ページにアクセス中...");
     await page.goto("https://moneyforward.com/bs/liability", {
       waitUntil: "domcontentloaded",
     });
@@ -187,16 +203,26 @@ chromium.use(stealth);
       return data;
     });
 
-    console.log(JSON.stringify(result, null, 2));
+    logger.log(JSON.stringify(result, null, 2));
 
-    console.error("データ取得完了");
-    console.error(
+    logger.error("データ取得完了");
+    logger.error(
       `breakdown=${result.meta.breakdown}, sections=${result.meta.sections}, rows=${result.meta.rows}`
     );
   } catch (error) {
-    console.error("エラー:", error);
+    logger.error("エラー:", error);
     await page.screenshot({ path: "debug-error.png", fullPage: true });
   } finally {
     await browser.close();
   }
-})();
+};
+
+if (require.main === module) {
+  runLiabilityScrape();
+}
+
+module.exports = {
+  buildContextOptions,
+  getAuthPaths,
+  runLiabilityScrape,
+};

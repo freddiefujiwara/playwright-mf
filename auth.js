@@ -3,37 +3,73 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-(async () => {
-  const browser = await chromium.launch({ headless: false }); // ブラウザを表示
+const getAuthPaths = ({
+  homedir = os.homedir,
+  join = path.join,
+} = {}) => {
+  const authDir = join(homedir(), ".config", "playwright-mf");
+  return {
+    authDir,
+    authPath: join(authDir, "auth.json"),
+  };
+};
+
+const persistAuthState = async ({
+  context,
+  authDir,
+  authPath,
+  fsModule = fs,
+  logger = console,
+} = {}) => {
+  try {
+    fsModule.mkdirSync(authDir, { recursive: true });
+    await context.storageState({ path: authPath });
+    logger.log(`認証情報を保存しました: ${authPath}`);
+  } catch (err) {
+    logger.error("auth.json の保存に失敗しました:", err);
+  }
+};
+
+const runAuthFlow = async ({
+  chromiumModule = chromium,
+  stdin = process.stdin,
+  logger = console,
+  exit = process.exit,
+  authPaths = getAuthPaths(),
+} = {}) => {
+  const browser = await chromiumModule.launch({ headless: false }); // ブラウザを表示
   const context = await browser.newContext();
   const page = await context.newPage();
 
   await page.goto("https://moneyforward.com/users/sign_in");
 
-  console.log("ブラウザでログインを完了させてください。");
-  console.log("完了したら、ターミナルに戻って Enter を押してください...");
-
-  // 保存先: ~/.config/playwright-mf/auth.json
-  const authDir = path.join(os.homedir(), ".config", "playwright-mf");
-  const authPath = path.join(authDir, "auth.json");
+  logger.log("ブラウザでログインを完了させてください。");
+  logger.log("完了したら、ターミナルに戻って Enter を押してください...");
 
   // stdin が止まる環境対策
-  process.stdin.resume();
+  stdin.resume();
 
-  process.stdin.once("data", async () => {
+  stdin.once("data", async () => {
     try {
-      // ディレクトリが無ければ作成
-      fs.mkdirSync(authDir, { recursive: true });
-
-      // 認証状態を保存
-      await context.storageState({ path: authPath });
-
-      console.log(`認証情報を保存しました: ${authPath}`);
-    } catch (err) {
-      console.error("auth.json の保存に失敗しました:", err);
+      await persistAuthState({
+        context,
+        authDir: authPaths.authDir,
+        authPath: authPaths.authPath,
+        logger,
+      });
     } finally {
       await browser.close();
-      process.exit();
+      exit();
     }
   });
-})();
+};
+
+if (require.main === module) {
+  runAuthFlow();
+}
+
+module.exports = {
+  getAuthPaths,
+  persistAuthState,
+  runAuthFlow,
+};
