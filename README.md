@@ -179,6 +179,57 @@ Notes:
 - `breakdown` is the summary table at the top of the page.
 - `details` contains the detailed liability table with a `残高_yen` helper field.
 
+## Step 4: Get cash flow (transaction) data
+
+After you have `auth.json`, run:
+
+```bash
+node cf.js
+```
+
+What happens:
+
+- The script opens the cash flow (入出金) page in headless Chromium.
+- It reads the transaction table for the current month.
+- It prints a JSON result to **stdout**.
+
+Example output shape:
+```json
+{
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "transactions": [
+    {
+      "date": "01/27(火)",
+      "content": "年会費",
+      "amount_yen": -550,
+      "account": "monexカード マネックスカード 2777",
+      "category_main": "その他",
+      "category_sub": "雑費",
+      "memo": "",
+      "is_transfer": false
+    }
+  ]
+}
+```
+
+## Testing
+
+This project uses `vitest` for testing.
+
+To run all tests:
+
+```bash
+npx vitest run
+```
+
+To run tests with a coverage report:
+
+```bash
+npx vitest run --coverage
+```
+
+The tests mock network requests to avoid actual logins and scraping during test runs.
+
 ## Output files
 
 - The JSON is **printed to the terminal**.
@@ -191,7 +242,7 @@ Notes:
 - On error, the script saves a screenshot here:
 
 ```
-./debug-error.png
+./cf-error.png
 ```
 
 ## Troubleshooting
