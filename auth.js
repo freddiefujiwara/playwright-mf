@@ -36,6 +36,7 @@ const runAuthFlow = async ({
   logger = console,
   exit = process.exit,
   authPaths = getAuthPaths(),
+  persistFn = persistAuthState,
 } = {}) => {
   const browser = await chromiumModule.launch({ headless: false }); // ブラウザを表示
   const context = await browser.newContext();
@@ -51,7 +52,7 @@ const runAuthFlow = async ({
 
   stdin.once("data", async () => {
     try {
-      await persistAuthState({
+      await persistFn({
         context,
         authDir: authPaths.authDir,
         authPath: authPaths.authPath,
@@ -64,6 +65,7 @@ const runAuthFlow = async ({
   });
 };
 
+/* c8 ignore next 3 */
 if (require.main === module) {
   runAuthFlow();
 }
