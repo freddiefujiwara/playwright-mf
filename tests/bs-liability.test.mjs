@@ -18,7 +18,170 @@ const {
   getAuthPaths,
   registerStealth,
   runLiabilityScrape,
+  normalizeLiabilityResult,
 } = liability;
+
+describe("normalizeLiabilityResult", () => {
+  it("should normalize raw scraped data", () => {
+    const rawResult = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      total: { total_text: "負債総額：1,234,567円" },
+      breakdown: [
+        {
+          category: "住宅ローン",
+          amount_text: "1,000,000円",
+          percentage_text: "81.00%",
+        },
+        {
+          category: "奨学金",
+          amount_text: "234,567円",
+          percentage_text: "19.00%",
+        },
+      ],
+      details: [
+        {
+          id: "liability_det",
+          category: "負債詳細",
+          tables: [
+            {
+              headers: ["種類", "金融機関", "残高"],
+              rows: [["住宅ローン", "三菱UFJ銀行", "1,000,000円"]],
+            },
+          ],
+        },
+      ],
+    };
+    const expected = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      total: { total_text: "1,234,567円", total_yen: 1234567 },
+      breakdown: [
+        {
+          category: "住宅ローン",
+          amount_text: "1,000,000円",
+          amount_yen: 1000000,
+          percentage_text: "81.00%",
+          percentage: 81,
+        },
+        {
+          category: "奨学金",
+          amount_text: "234,567円",
+          amount_yen: 234567,
+          percentage_text: "19.00%",
+          percentage: 19,
+        },
+      ],
+      details: [
+        {
+          id: "liability_det",
+          category: "負債詳細",
+          tables: [
+            {
+              headers: ["種類", "金融機関", "残高"],
+              items: [
+                {
+                  種類: "住宅ローン",
+                  金融機関: "三菱UFJ銀行",
+                  残高: "1,000,000円",
+                  残高_yen: 1000000,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      meta: { breakdown: 2, sections: 1, rows: 1 },
+    };
+    expect(normalizeLiabilityResult(rawResult)).toEqual(expected);
+  });
+
+  it("should handle empty breakdown and details", () => {
+    const rawResult = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      total: { total_text: "負債総額：0円" },
+      breakdown: [],
+      details: [],
+    };
+    const expected = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      total: { total_text: "0円", total_yen: 0 },
+      breakdown: [],
+      details: [],
+      meta: { breakdown: 0, sections: 0, rows: 0 },
+    };
+    expect(normalizeLiabilityResult(rawResult)).toEqual(expected);
+  });
+
+  it("should filter out invalid breakdown items", () => {
+    const rawResult = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      total: { total_text: "負債総額：1,000円" },
+      breakdown: [
+        { category: "  ", amount_text: "1,000円", percentage_text: "100%" },
+        {
+          category: "奨学金",
+          amount_text: "1,000円",
+          percentage_text: "100%",
+        },
+      ],
+      details: [],
+    };
+    const expected = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      total: { total_text: "1,000円", total_yen: 1000 },
+      breakdown: [
+        {
+          category: "奨学金",
+          amount_text: "1,000円",
+          amount_yen: 1000,
+          percentage_text: "100%",
+          percentage: 100,
+        },
+      ],
+      details: [],
+      meta: { breakdown: 1, sections: 0, rows: 0 },
+    };
+    expect(normalizeLiabilityResult(rawResult)).toEqual(expected);
+  });
+
+  it("should handle alternative detail table columns", () => {
+    const rawResult = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      total: { total_text: "負債総額：1,000円" },
+      breakdown: [],
+      details: [
+        {
+          id: "liability_det",
+          category: "負債詳細",
+          tables: [
+            {
+              headers: ["col_1", "col_2", "col_3"],
+              rows: [["val_1", "val_2", "1,000円"]],
+            },
+          ],
+        },
+      ],
+    };
+    const expected = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      total: { total_text: "1,000円", total_yen: 1000 },
+      breakdown: [],
+      details: [
+        {
+          id: "liability_det",
+          category: "負債詳細",
+          tables: [
+            {
+              headers: ["col_1", "col_2", "col_3"],
+              items: [{ col_1: "val_1", col_2: "val_2", col_3: "1,000円", "残高_yen": 1000 }],
+            },
+          ],
+        },
+      ],
+      meta: { breakdown: 0, sections: 1, rows: 1 },
+    };
+    expect(normalizeLiabilityResult(rawResult)).toEqual(expected);
+  });
+});
 
 describe("bs-liability helpers", () => {
   it("registers stealth plugin", () => {
