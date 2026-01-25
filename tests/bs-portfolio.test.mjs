@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { withDom } from "./helpers/dom.mjs";
 
 const chromiumMock = {
   use: vi.fn(),
@@ -153,14 +154,40 @@ describe("bs-portfolio helpers", () => {
 
 describe("runPortfolioScrape", () => {
   it("should scrape portfolio data and log the result", async () => {
-    const mockResult = {
-      timestamp: "2024-01-01T00:00:00.000Z",
-      breakdown: [{ category: "株式", amount_text: "1,000円", percentage_text: "100%" }],
-      assetClassRatio: [],
-      details: [],
-    };
+    const html = `
+      <section class="bs-total-assets">
+        <table class="table-bordered">
+          <tbody>
+            <tr>
+              <th><a>株式</a></th>
+              <td>1,000円</td>
+              <td>100%</td>
+            </tr>
+            <tr>
+              <th> </th>
+              <td>0円</td>
+              <td>0%</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section id="portfolio_det_stock">
+        <h1 class="heading-normal">株式</h1>
+        <h1 class="heading-small">合計：1,000円</h1>
+        <table class="table-bordered">
+          <thead>
+            <tr><th>銘柄</th><th>評価額</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>A株式会社</td><td>1,000円</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <script>
+        var assetClassRatio = [{"name":"株式","ratio":100}];
+      </script>
+    `;
     const expected = {
-      timestamp: "2024-01-01T00:00:00.000Z",
       breakdown: [
         {
           category: "株式",
@@ -170,16 +197,29 @@ describe("runPortfolioScrape", () => {
           percentage: 100,
         },
       ],
-      assetClassRatio: [],
-      details: [],
-      meta: { breakdown: 1, sections: 0, rows: 0 },
+      assetClassRatio: [{ name: "株式", ratio: 100 }],
+      details: [
+        {
+          id: "portfolio_det_stock",
+          category: "株式",
+          total_text: "1,000円",
+          total_yen: 1000,
+          tables: [
+            {
+              headers: ["銘柄", "評価額"],
+              items: [{ 銘柄: "A株式会社", 評価額: "1,000円" }],
+            },
+          ],
+        },
+      ],
+      meta: { breakdown: 1, sections: 1, rows: 1 },
     };
 
     const page = {
       goto: vi.fn().mockResolvedValue(undefined),
       waitForSelector: vi.fn().mockResolvedValue(undefined),
-      waitForFunction: vi.fn().mockResolvedValue(undefined),
-      evaluate: vi.fn().mockResolvedValue(mockResult),
+      waitForFunction: vi.fn().mockImplementation((fn) => withDom(html, () => fn())),
+      evaluate: vi.fn().mockImplementation((fn) => withDom(html, () => fn())),
       screenshot: vi.fn().mockResolvedValue(undefined),
     };
     const context = { newPage: vi.fn().mockResolvedValue(page) };
@@ -208,9 +248,60 @@ describe("runPortfolioScrape", () => {
     expect(page.waitForSelector).toHaveBeenCalledTimes(2);
     expect(page.waitForFunction).toHaveBeenCalled();
     expect(page.evaluate).toHaveBeenCalled();
-    expect(logger.log).toHaveBeenCalledWith(
-      JSON.stringify(expected, null, 2)
-    );
+    const logged = JSON.parse(logger.log.mock.calls[0][0]);
+    expect(logged.timestamp).toEqual(expect.any(String));
+    expect(logged).toEqual(expect.objectContaining(expected));
+    expect(browser.close).toHaveBeenCalled();
+  });
+
+  it("should handle asset class ratio fallback and missing summary table", async () => {
+    const html = `
+      <section id="portfolio_det_cash">
+        <h1 class="heading-normal">現金</h1>
+        <h1 class="heading-small">合計：500円</h1>
+        <table class="table-bordered">
+          <thead>
+            <tr><th>銘柄</th><th>評価額</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>普通預金</td><td>500円</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <script>
+        var assetClassRatio = [{name:"現金",ratio:10}];
+      </script>
+    `;
+
+    const page = {
+      goto: vi.fn().mockResolvedValue(undefined),
+      waitForSelector: vi.fn().mockResolvedValue(undefined),
+      waitForFunction: vi.fn().mockImplementation((fn) => withDom(html, () => fn())),
+      evaluate: vi.fn().mockImplementation((fn) => withDom(html, () => fn())),
+      screenshot: vi.fn().mockResolvedValue(undefined),
+    };
+    const context = { newPage: vi.fn().mockResolvedValue(page) };
+    const browser = {
+      newContext: vi.fn().mockResolvedValue(context),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    chromiumMock.launch.mockResolvedValue(browser);
+
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const authPaths = {
+      authDir: "/tmp/auth",
+      authPath: "/tmp/auth/auth.json",
+    };
+
+    await runPortfolioScrape({
+      chromiumModule: chromiumMock,
+      authPaths,
+      logger,
+    });
+
+    const logged = JSON.parse(logger.log.mock.calls[0][0]);
+    expect(logged.breakdown).toEqual([]);
+    expect(logged.assetClassRatio).toEqual([{ name: "現金", ratio: 10 }]);
     expect(browser.close).toHaveBeenCalled();
   });
 

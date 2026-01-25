@@ -4,6 +4,7 @@ const { default: utils } = await import("../lib/scrape-utils.js");
 
 const {
   normalizeWhitespace,
+  buildHeaders,
   parsePercent,
   parseTableData,
   parseYen,
@@ -23,6 +24,12 @@ describe("scrape-utils", () => {
 
   it("parses percent", () => {
     expect(parsePercent("12.5%")).toBe(12.5);
+  });
+
+  it("builds headers from provided list and rows", () => {
+    expect(buildHeaders(["A", "B"], [["1", "2"]])).toEqual(["A", "B"]);
+    expect(buildHeaders([], [["1", "2"], ["3"]])).toEqual(["col_1", "col_2"]);
+    expect(buildHeaders([], [])).toEqual([]);
   });
 
   it("parses tables with fallback headers", () => {
