@@ -18,7 +18,110 @@ const {
   getAuthPaths,
   registerStealth,
   runPortfolioScrape,
+  normalizePortfolioResult,
 } = portfolio;
+
+describe("normalizePortfolioResult", () => {
+  it("should normalize raw scraped data", () => {
+    const rawResult = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      breakdown: [
+        {
+          category: "株式",
+          amount_text: "1,000,000円",
+          percentage_text: "100%",
+        },
+      ],
+      assetClassRatio: [{ name: "株式", y: 100 }],
+      details: [
+        {
+          id: "portfolio_det_stock",
+          category: "株式",
+          total_text: "合計：1,000,000円",
+          tables: [
+            {
+              headers: ["銘柄", "評価額"],
+              rows: [["A株式会社", "1,000,000円"]],
+            },
+          ],
+        },
+      ],
+    };
+
+    const expected = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      breakdown: [
+        {
+          category: "株式",
+          amount_text: "1,000,000円",
+          amount_yen: 1000000,
+          percentage_text: "100%",
+          percentage: 100,
+        },
+      ],
+      assetClassRatio: [{ name: "株式", y: 100 }],
+      details: [
+        {
+          id: "portfolio_det_stock",
+          category: "株式",
+          total_text: "1,000,000円",
+          total_yen: 1000000,
+          tables: [
+            {
+              headers: ["銘柄", "評価額"],
+              items: [{ 銘柄: "A株式会社", 評価額: "1,000,000円" }],
+            },
+          ],
+        },
+      ],
+      meta: { breakdown: 1, sections: 1, rows: 1 },
+    };
+    expect(normalizePortfolioResult(rawResult)).toEqual(expected);
+  });
+  it("should handle empty breakdown and details", () => {
+    const rawResult = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      breakdown: [],
+      assetClassRatio: [],
+      details: [],
+    };
+    const expected = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      breakdown: [],
+      assetClassRatio: [],
+      details: [],
+      meta: { breakdown: 0, sections: 0, rows: 0 },
+    };
+    expect(normalizePortfolioResult(rawResult)).toEqual(expected);
+  });
+  it("should filter out invalid breakdown items", () => {
+    const rawResult = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      breakdown: [
+        { category: "  ", amount_text: "1,000円", percentage_text: "100%" },
+        { category: "株式", amount_text: "1,000円", percentage_text: "100%" },
+      ],
+      assetClassRatio: [],
+      details: [],
+    };
+    const expected = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      breakdown: [
+        {
+          category: "株式",
+          amount_text: "1,000円",
+          amount_yen: 1000,
+          percentage_text: "100%",
+          percentage: 100,
+        },
+      ],
+      assetClassRatio: [],
+      details: [],
+      meta: { breakdown: 1, sections: 0, rows: 0 },
+    };
+    expect(normalizePortfolioResult(rawResult)).toEqual(expected);
+  });
+});
 
 describe("bs-portfolio helpers", () => {
   it("registers stealth plugin", () => {
