@@ -24,7 +24,7 @@ const runCfScrape = async () => {
     await page.goto("https://moneyforward.com/cf", { waitUntil: "networkidle" });
 
     // 明細テーブルが表示されるまで待機
-    await page.waitForSelector("#transaction_list", { timeout: 30000 });
+    await page.waitForSelector("#cf-detail-table", { timeout: 30000 });
 
     const result = await page.evaluate(() => {
       const norm = (s) => (s ?? "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").trim();
@@ -39,16 +39,16 @@ const runCfScrape = async () => {
       };
 
       // 明細テーブルの行を取得
-      const rows = document.querySelectorAll("#transaction_list tbody tr.transaction_t");
+      const rows = document.querySelectorAll("#cf-detail-table tbody.list_body tr.transaction_list");
 
       rows.forEach(tr => {
-        const date = norm(tr.querySelector(".td-date")?.innerText);
-        const content = norm(tr.querySelector(".td-content")?.innerText);
-        const amountText = norm(tr.querySelector(".td-amount")?.innerText);
-        const account = norm(tr.querySelector(".td-account")?.innerText);
-        const lCategory = norm(tr.querySelector(".td-large-category")?.innerText);
-        const sCategory = norm(tr.querySelector(".td-middle-category")?.innerText);
-        const memo = norm(tr.querySelector(".td-memo")?.innerText);
+        const date = norm(tr.querySelector(".date span")?.innerText);
+        const content = norm(tr.querySelector(".content div span")?.innerText);
+        const amountText = norm(tr.querySelector(".amount span.offset")?.innerText);
+        const account = norm(tr.querySelector(".note.calc")?.title);
+        const lCategory = norm(tr.querySelector(".lctg .v_l_ctg")?.innerText);
+        const sCategory = norm(tr.querySelector(".mctg .v_m_ctg")?.innerText);
+        const memo = norm(tr.querySelector(".memo .noform span")?.innerText);
 
         if (content) {
           data.transactions.push({
@@ -59,7 +59,7 @@ const runCfScrape = async () => {
             category_main: lCategory, // 大項目
             category_sub: sCategory,  // 中項目
             memo,           // メモ
-            is_transfer: tr.classList.contains("transfer") // 振替かどうか
+            is_transfer: tr.classList.contains("mf-grayout") // 振替かどうか
           });
         }
       });

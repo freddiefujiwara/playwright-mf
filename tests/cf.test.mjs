@@ -77,7 +77,7 @@ describe('cf.js', () => {
       expect(mockBrowser.newContext).toHaveBeenCalled();
       expect(mockContext.newPage).toHaveBeenCalled();
       expect(mockPage.goto).toHaveBeenCalledWith('https://moneyforward.com/cf', { waitUntil: 'networkidle' });
-      expect(mockPage.waitForSelector).toHaveBeenCalledWith('#transaction_list', { timeout: 30000 });
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith('#cf-detail-table', { timeout: 30000 });
       expect(mockPage.evaluate).toHaveBeenCalled();
       expect(console.log).toHaveBeenCalledWith(JSON.stringify(mockData, null, 2));
       expect(console.error).toHaveBeenCalledWith('入出金ページにアクセス中...');
