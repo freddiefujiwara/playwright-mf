@@ -1,6 +1,8 @@
-const { describe, expect, it, vi } = require("vitest");
+import { describe, expect, it, vi } from "vitest";
 
-const { getAuthPaths, persistAuthState } = require("../auth");
+import auth from "../auth.js";
+
+const { getAuthPaths, persistAuthState } = auth;
 
 describe("auth helpers", () => {
   it("builds auth paths from homedir", () => {
