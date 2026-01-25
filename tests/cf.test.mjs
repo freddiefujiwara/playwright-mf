@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getAuthPaths, registerStealth, runCfScrape } from '../cf.js';
+import { getAuthPaths, registerStealth, runCfScrape, normalizeCfResult } from '../cf.js';
 // Import the actual chromium object to spy on it
 import { chromium } from 'playwright-extra';
 import path from 'path';
@@ -38,6 +38,113 @@ describe('cf.js', () => {
       const plugin = {};
       registerStealth(chromiumModule, plugin);
       expect(use).toHaveBeenCalledWith(plugin);
+    });
+  });
+
+  describe('normalizeCfResult', () => {
+    it('should normalize transactions correctly', () => {
+      const raw = {
+        timestamp: '2023-01-01T00:00:00.000Z',
+        transactions: [
+          {
+            date: ' 01/01 ',
+            content: ' Test Transaction ',
+            amount_text: ' -1,000円 ',
+            account: ' Test Bank ',
+            category_main: ' Main ',
+            category_sub: ' Sub ',
+            memo: ' Memo ',
+            is_transfer: false,
+          },
+          {
+            date: '01/02',
+            content: 'Transfer',
+            amount_text: '-500円',
+            account: 'Bank A',
+            category_main: 'Transfer',
+            category_sub: 'Out',
+            memo: '',
+            is_transfer: true,
+          },
+        ],
+      };
+      const expected = {
+        timestamp: '2023-01-01T00:00:00.000Z',
+        transactions: [
+          {
+            date: '01/01',
+            content: 'Test Transaction',
+            amount_yen: -1000,
+            account: 'Test Bank',
+            category_main: 'Main',
+            category_sub: 'Sub',
+            memo: 'Memo',
+            is_transfer: false,
+          },
+          {
+            date: '01/02',
+            content: 'Transfer',
+            amount_yen: -500,
+            account: 'Bank A',
+            category_main: 'Transfer',
+            category_sub: 'Out',
+            memo: '',
+            is_transfer: true,
+          },
+        ],
+      };
+      const result = normalizeCfResult(raw);
+      expect(result).toEqual(expected);
+    });
+
+    it('should filter out transactions with no content', () => {
+      const raw = {
+        timestamp: '2023-01-01T00:00:00.000Z',
+        transactions: [
+          {
+            date: '01/01',
+            content: 'Valid',
+            amount_text: '-1,000円',
+            account: 'Test Bank',
+            category_main: 'Main',
+            category_sub: 'Sub',
+            memo: 'Memo',
+            is_transfer: false,
+          },
+          {
+            date: '01/02',
+            content: ' ',
+            amount_text: '-500円',
+            account: 'Bank A',
+            category_main: 'Transfer',
+            category_sub: 'Out',
+            memo: '',
+            is_transfer: true,
+          },
+          {
+            date: '01/03',
+            content: '',
+            amount_text: '-200円',
+            account: 'Bank B',
+            category_main: 'Etc',
+            category_sub: 'Etc',
+            memo: '',
+            is_transfer: false,
+          },
+        ],
+      };
+      const result = normalizeCfResult(raw);
+      expect(result.transactions.length).toBe(1);
+      expect(result.transactions[0].content).toBe('Valid');
+    });
+
+    it('should handle empty transactions array', () => {
+      const raw = {
+        timestamp: '2023-01-01T00:00:00.000Z',
+        transactions: [],
+      };
+      const result = normalizeCfResult(raw);
+      expect(result.transactions).toEqual([]);
     });
   });
 

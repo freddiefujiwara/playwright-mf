@@ -7,6 +7,7 @@ const {
   parsePercent,
   parseTableData,
   parseYen,
+  pickFirst,
 } = utils;
 
 describe("scrape-utils", () => {
@@ -38,5 +39,11 @@ describe("scrape-utils", () => {
       { col_1: "A", col_2: "1" },
       { col_1: "B", col_2: "2" },
     ]);
+  });
+
+  it("picks the first regex match group", () => {
+    expect(pickFirst("合計：1,234円", /合計：([0-9,]+円)/)).toBe("1,234円");
+    expect(pickFirst("合計：1,234円", /存在しないパターン/)).toBe("");
+    expect(pickFirst(null, /a/)).toBe("");
   });
 });
