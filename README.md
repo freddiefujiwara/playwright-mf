@@ -202,7 +202,7 @@ Example output shape:
       "date": "01/27(火)",
       "content": "年会費",
       "amount_yen": -550,
-      "account": "monexカード マネックスカード 2777",
+      "account": "サンプルカード 1234",
       "category_main": "その他",
       "category_sub": "雑費",
       "memo": "",
