@@ -6,11 +6,13 @@ const os = require("os");
 const getAuthPaths = ({
   homedir = os.homedir,
   join = path.join,
+  env = process.env,
 } = {}) => {
-  const authDir = join(homedir(), ".config", "playwright-mf");
+  const defaultAuthDir = join(homedir(), ".config", "playwright-mf");
+  const authDir = env.PLAYWRIGHT_MF_AUTH_DIR ?? defaultAuthDir;
   return {
     authDir,
-    authPath: join(authDir, "auth.json"),
+    authPath: env.PLAYWRIGHT_MF_AUTH_PATH ?? join(authDir, "auth.json"),
   };
 };
 
@@ -42,7 +44,9 @@ const runAuthFlow = async ({
   const context = await browser.newContext();
   const page = await context.newPage();
 
-  await page.goto("https://moneyforward.com/users/sign_in");
+  await page.goto("https://moneyforward.com/users/sign_in", {
+    waitUntil: "domcontentloaded",
+  });
 
   logger.log("Please complete the login process in the browser.");
   logger.log("When you are done, please return to the terminal and press Enter...");

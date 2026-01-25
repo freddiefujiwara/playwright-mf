@@ -30,7 +30,7 @@ describe("bs-portfolio helpers", () => {
     const fakeHomedir = () => "/home/tester";
     const join = (...parts) => parts.join("/");
 
-    const paths = getAuthPaths({ homedir: fakeHomedir, join });
+    const paths = getAuthPaths({ homedir: fakeHomedir, join, env: {} });
 
     expect(paths).toEqual({
       authDir: "/home/tester/.config/playwright-mf",
@@ -52,7 +52,21 @@ describe("runPortfolioScrape", () => {
   it("should scrape portfolio data and log the result", async () => {
     const mockResult = {
       timestamp: "2024-01-01T00:00:00.000Z",
-      breakdown: [{ category: "株式", amount_yen: 1000 }],
+      breakdown: [{ category: "株式", amount_text: "1,000円", percentage_text: "100%" }],
+      assetClassRatio: [],
+      details: [],
+    };
+    const expected = {
+      timestamp: "2024-01-01T00:00:00.000Z",
+      breakdown: [
+        {
+          category: "株式",
+          amount_text: "1,000円",
+          amount_yen: 1000,
+          percentage_text: "100%",
+          percentage: 100,
+        },
+      ],
       assetClassRatio: [],
       details: [],
       meta: { breakdown: 1, sections: 0, rows: 0 },
@@ -61,6 +75,7 @@ describe("runPortfolioScrape", () => {
     const page = {
       goto: vi.fn().mockResolvedValue(undefined),
       waitForSelector: vi.fn().mockResolvedValue(undefined),
+      waitForFunction: vi.fn().mockResolvedValue(undefined),
       evaluate: vi.fn().mockResolvedValue(mockResult),
       screenshot: vi.fn().mockResolvedValue(undefined),
     };
@@ -88,9 +103,10 @@ describe("runPortfolioScrape", () => {
       { waitUntil: "domcontentloaded" }
     );
     expect(page.waitForSelector).toHaveBeenCalledTimes(2);
+    expect(page.waitForFunction).toHaveBeenCalled();
     expect(page.evaluate).toHaveBeenCalled();
     expect(logger.log).toHaveBeenCalledWith(
-      JSON.stringify(mockResult, null, 2)
+      JSON.stringify(expected, null, 2)
     );
     expect(browser.close).toHaveBeenCalled();
   });
