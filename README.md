@@ -251,6 +251,26 @@ The tests mock network requests to avoid actual logins and scraping during test 
 - If login fails or the script does not work, try running `node auth.js` again or delete `~/.config/playwright-mf/auth.json` and re-login.
 - If the page layout changes, selectors may fail and you may get an error screenshot.
 
+## Step 5: Update account data
+
+To update specific accounts or all accounts, run:
+
+```bash
+node accounts-update.js "Account Name 1" "Account Name 2"
+```
+
+If you don't provide any account names, it will attempt to update all accounts:
+
+```bash
+node accounts-update.js
+```
+
+What happens:
+
+- The script opens the accounts page in headless Chromium.
+- It finds the "Update" (更新) button for the specified accounts (or all accounts).
+- It clicks each button to trigger an update.
+
 ## Security
 
 `auth.json` contains your login session. Do not share it.

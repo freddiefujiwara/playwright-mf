@@ -11,8 +11,6 @@
 //   node bs-liability.js > liability.json
 //
 const { chromium } = require("playwright-extra");
-const path = require("path");
-const os = require("os");
 const stealth = require("puppeteer-extra-plugin-stealth")();
 const {
   normalizeWhitespace,
@@ -20,29 +18,10 @@ const {
   parseTableData,
   parseYen,
   pickFirst,
+  getAuthPaths,
+  buildContextOptions,
+  registerStealth,
 } = require("./lib/scrape-utils");
-
-const getAuthPaths = ({
-  homedir = os.homedir,
-  join = path.join,
-  env = process.env,
-} = {}) => {
-  const defaultAuthDir = join(homedir(), ".config", "playwright-mf");
-  const authDir = env.PLAYWRIGHT_MF_AUTH_DIR ?? defaultAuthDir;
-  return {
-    authDir,
-    authPath: env.PLAYWRIGHT_MF_AUTH_PATH ?? join(authDir, "auth.json"),
-  };
-};
-
-const buildContextOptions = (authPath) => ({
-  storageState: authPath,
-  viewport: { width: 1280, height: 800 },
-});
-
-const registerStealth = (chromiumModule = chromium, plugin = stealth) => {
-  chromiumModule.use(plugin);
-};
 
 const normalizeLiabilityResult = (raw) => {
   const totalText = pickFirst(
