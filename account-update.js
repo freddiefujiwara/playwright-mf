@@ -63,12 +63,16 @@ const runAccountUpdate = async (targetAccountName, {
 };
 
 // コマンドライン引数から口座名を受け取る例: node accounts-update.js "楽天銀行@freddie"
+/* c8 ignore next 10 */
 if (require.main === module) {
   const accountName = process.argv[2];
   if (!accountName) {
-    console.error("Please provide an account name. (e.g., node accounts-update.js \"PayPay\")");
+    console.error(
+      'Please provide an account name. (e.g., node accounts-update.js "PayPay")'
+    );
     process.exit(1);
   }
   runAccountUpdate(accountName);
 }
 
+module.exports = { runAccountUpdate };
