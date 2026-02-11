@@ -1,6 +1,5 @@
 const { chromium } = require("playwright-extra");
-const stealth = require("puppeteer-extra-plugin-stealth")();
-const { getAuthPaths, buildContextOptions, registerStealth } = require("./cf");
+const { getAuthPaths, buildContextOptions, registerStealth } = require("./lib/scrape-utils");
 
 /**
  * Update a single account by name.

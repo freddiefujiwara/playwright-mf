@@ -1,20 +1,6 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
-const path = require("path");
-const os = require("os");
-
-const getAuthPaths = ({
-  homedir = os.homedir,
-  join = path.join,
-  env = process.env,
-} = {}) => {
-  const defaultAuthDir = join(homedir(), ".config", "playwright-mf");
-  const authDir = env.PLAYWRIGHT_MF_AUTH_DIR ?? defaultAuthDir;
-  return {
-    authDir,
-    authPath: env.PLAYWRIGHT_MF_AUTH_PATH ?? join(authDir, "auth.json"),
-  };
-};
+const { getAuthPaths } = require("./lib/scrape-utils");
 
 const persistAuthState = async ({
   context,
