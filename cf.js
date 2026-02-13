@@ -33,6 +33,7 @@ const normalizeCfResult = (raw) => {
 };
 
 const runCfScrape = async ({
+  prevMonths = 0,
   chromiumModule = chromium,
   authPaths = getAuthPaths(),
   logger = console,
@@ -49,6 +50,15 @@ const runCfScrape = async ({
     await page.goto("https://moneyforward.com/cf", {
       waitUntil: "domcontentloaded",
     });
+
+    if (prevMonths > 0) {
+      logger.error(`Moving back ${prevMonths} month(s)...`);
+      for (let i = 0; i < prevMonths; i++) {
+        await page.click(".fc-button-prev");
+        await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+        await page.waitForSelector("#cf-detail-table", { timeout: 30000 });
+      }
+    }
 
     // Wait for the transaction table to be visible
     await page.waitForSelector("#cf-detail-table", { timeout: 30000 });
@@ -93,6 +103,13 @@ const runCfScrape = async ({
       `Scraping complete: Extracted ${result.transactions.length} transactions.`
     );
 
+    if (prevMonths > 0) {
+      logger.error("Returning to current month...");
+      await page.click(".fc-button-today");
+      await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+      await page.waitForSelector("#cf-detail-table", { timeout: 30000 });
+    }
+
   } catch (error) {
     logger.error("An error occurred:", error);
     await page.screenshot({ path: "cf-error.png" });
@@ -101,9 +118,23 @@ const runCfScrape = async ({
   }
 };
 
-/* c8 ignore next 3 */
+/* c8 ignore next 17 */
 if (require.main === module) {
-  runCfScrape();
+  const args = process.argv.slice(2);
+  let prevMonths = 0;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "-p" && args[i + 1]) {
+      const val = parseInt(args[i + 1], 10);
+      if (!isNaN(val)) {
+        prevMonths = val;
+      }
+      break;
+    }
+  }
+  runCfScrape({ prevMonths }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }
 
 module.exports = {

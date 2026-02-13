@@ -193,6 +193,14 @@ What happens:
 - It reads the transaction table for the current month.
 - It prints a JSON result to **stdout**.
 
+You can also specify `-p <n>` to move back `n` months before extraction:
+
+```bash
+node cf.js -p 1
+```
+
+This will click the "Previous" button `n` times before extracting data, and then return to the current month by clicking the "Today" button.
+
 Example output shape:
 ```json
 {

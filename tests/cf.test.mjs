@@ -159,6 +159,8 @@ describe('cf.js', () => {
         waitForSelector: vi.fn().mockResolvedValue(undefined),
         evaluate: vi.fn(),
         screenshot: vi.fn().mockResolvedValue(undefined),
+        click: vi.fn().mockResolvedValue(undefined),
+        waitForLoadState: vi.fn().mockResolvedValue(undefined),
       };
       mockContext = {
         newPage: vi.fn().mockResolvedValue(mockPage),
@@ -254,6 +256,36 @@ describe('cf.js', () => {
       expect(console.error).toHaveBeenCalledWith('An error occurred:', error);
       expect(mockPage.screenshot).toHaveBeenCalledWith({ path: 'cf-error.png' });
       expect(mockBrowser.close).toHaveBeenCalled();
+    });
+
+    it('should navigate back and then back to today when prevMonths is specified', async () => {
+      const html = `
+        <table id="cf-detail-table">
+          <tbody class="list_body">
+            <tr class="transaction_list">
+              <td class="date"><span>01/01</span></td>
+              <td class="content"><div><span>Test</span></div></td>
+              <td class="amount"><span class="offset">100円</span></td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+      mockPage.evaluate.mockImplementation((fn) => withDom(html, () => fn()));
+
+      await runCfScrape({ prevMonths: 2 });
+
+      expect(mockPage.click).toHaveBeenCalledTimes(3); // 2 prev + 1 today
+      expect(mockPage.click.mock.calls[0]).toEqual(['.fc-button-prev']);
+      expect(mockPage.click.mock.calls[1]).toEqual(['.fc-button-prev']);
+      expect(mockPage.click.mock.calls[2]).toEqual(['.fc-button-today']);
+
+      expect(mockPage.waitForLoadState).toHaveBeenCalledWith('networkidle', { timeout: 10000 });
+      expect(mockPage.waitForLoadState).toHaveBeenCalledTimes(3);
+
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith('#cf-detail-table', { timeout: 30000 });
+
+      expect(console.error).toHaveBeenCalledWith('Moving back 2 month(s)...');
+      expect(console.error).toHaveBeenCalledWith('Returning to current month...');
     });
   });
 });
