@@ -55,7 +55,8 @@ const runCfScrape = async ({
       logger.error(`Moving back ${prevMonths} month(s)...`);
       for (let i = 0; i < prevMonths; i++) {
         await page.click(".fc-button-prev");
-        await page.waitForLoadState("networkidle");
+        await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+        await page.waitForSelector("#cf-detail-table", { timeout: 30000 });
       }
     }
 
@@ -105,7 +106,8 @@ const runCfScrape = async ({
     if (prevMonths > 0) {
       logger.error("Returning to current month...");
       await page.click(".fc-button-today");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+      await page.waitForSelector("#cf-detail-table", { timeout: 30000 });
     }
 
   } catch (error) {

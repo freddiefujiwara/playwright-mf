@@ -279,8 +279,10 @@ describe('cf.js', () => {
       expect(mockPage.click.mock.calls[1]).toEqual(['.fc-button-prev']);
       expect(mockPage.click.mock.calls[2]).toEqual(['.fc-button-today']);
 
-      expect(mockPage.waitForLoadState).toHaveBeenCalledWith('networkidle');
+      expect(mockPage.waitForLoadState).toHaveBeenCalledWith('networkidle', { timeout: 10000 });
       expect(mockPage.waitForLoadState).toHaveBeenCalledTimes(3);
+
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith('#cf-detail-table', { timeout: 30000 });
 
       expect(console.error).toHaveBeenCalledWith('Moving back 2 month(s)...');
       expect(console.error).toHaveBeenCalledWith('Returning to current month...');
