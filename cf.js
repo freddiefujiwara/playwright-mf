@@ -84,8 +84,8 @@ const runCfScrape = async ({
         data.transactions.push({
           date: text(tr.querySelector(".date span")),
           content: text(tr.querySelector(".content div span")),
-          amount_text: text(tr.querySelector(".amount span.offset")),
-          account: attr(tr.querySelector(".note.calc"), "title"),
+          amount_text: text(tr.querySelector(".amount .noform span")) || text(tr.querySelector(".amount span")),
+          account: attr(tr.querySelector(".note.calc"), "title") || text(tr.querySelector(".sub_account_id_hash .noform span")),
           category_main: text(tr.querySelector(".lctg .v_l_ctg")),
           category_sub: text(tr.querySelector(".mctg .v_m_ctg")),
           memo: text(tr.querySelector(".memo .noform span")),
