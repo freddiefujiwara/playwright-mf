@@ -275,8 +275,14 @@ describe('cf.js', () => {
       await runCfScrape({ prevMonths: 2 });
 
       expect(mockPage.click).toHaveBeenCalledTimes(3); // 2 prev + 1 today
-      expect(mockPage.click.mock.calls[0]).toEqual(['.fc-button-prev']);
-      expect(mockPage.click.mock.calls[1]).toEqual(['.fc-button-prev']);
+      expect(mockPage.click.mock.calls[0][0]).toBe(
+        'button.fc-button-prev.spec-fc-button-click-attached:not(.fc-state-disabled)'
+      );
+      expect(mockPage.click.mock.calls[0][1]).toEqual({ timeout: 30000 });
+      expect(mockPage.click.mock.calls[1][0]).toBe(
+        'button.fc-button-prev.spec-fc-button-click-attached:not(.fc-state-disabled)'
+      );
+      expect(mockPage.click.mock.calls[1][1]).toEqual({ timeout: 30000 });
       expect(mockPage.click.mock.calls[2]).toEqual(['.fc-button-today']);
 
       expect(mockPage.waitForLoadState).toHaveBeenCalledWith('networkidle', { timeout: 10000 });
