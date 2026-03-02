@@ -54,7 +54,11 @@ const runCfScrape = async ({
     if (prevMonths > 0) {
       logger.error(`Moving back ${prevMonths} month(s)...`);
       for (let i = 0; i < prevMonths; i++) {
-        await page.click(".fc-button-prev");
+        await page.click(
+          'button.fc-button-prev.spec-fc-button-click-attached' +
+          ':not(.fc-state-disabled)',
+          { timeout: 30_000 }
+        );
         await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
         await page.waitForSelector("#cf-detail-table", { timeout: 30000 });
       }
