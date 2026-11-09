@@ -295,25 +295,28 @@ describe('cf.js', () => {
     });
 
     it('should navigate to a target month and verify the rows', async () => {
-      mockPage.waitForFunction = vi.fn().mockResolvedValue(undefined);
+      mockPage.waitForTimeout = vi.fn().mockResolvedValue(undefined);
       let title = '2026/11/1 - 2026/11/30';
       mockPage.evaluate.mockImplementation(async (fn, arg) => {
         if (arg === '.fc-header-title h2') return title;
-        return {
-          timestamp: '2026-11-09T00:00:00.000Z',
-          transactions: [
-            {
-              date: '10/05',
-              content: 'Oct Tx',
-              amount_text: '-100円',
-              account: 'Bank',
-              category_main: 'Main',
-              category_sub: 'Sub',
-              memo: '',
-              is_transfer: false,
-            },
-          ],
-        };
+        if (fn.toString().includes('querySelectorAll')) {
+          return {
+            timestamp: '2026-11-09T00:00:00.000Z',
+            transactions: [
+              {
+                date: '10/05',
+                content: 'Oct Tx',
+                amount_text: '-100円',
+                account: 'Bank',
+                category_main: 'Main',
+                category_sub: 'Sub',
+                memo: '',
+                is_transfer: false,
+              },
+            ],
+          };
+        }
+        return 10; // first row already belongs to October
       });
       mockPage.click.mockImplementation(async (selector) => {
         if (selector.includes('fc-button-prev')) {
@@ -334,24 +337,27 @@ describe('cf.js', () => {
     });
 
     it('should fail loudly when rows fall outside the target month', async () => {
-      mockPage.waitForFunction = vi.fn().mockResolvedValue(undefined);
+      mockPage.waitForTimeout = vi.fn().mockResolvedValue(undefined);
       mockPage.evaluate.mockImplementation(async (fn, arg) => {
         if (arg === '.fc-header-title h2') return '2026/10/1 - 2026/10/31';
-        return {
-          timestamp: '2026-11-09T00:00:00.000Z',
-          transactions: [
-            {
-              date: '11/01',
-              content: 'Wrong month',
-              amount_text: '-100円',
-              account: 'Bank',
-              category_main: 'Main',
-              category_sub: 'Sub',
-              memo: '',
-              is_transfer: false,
-            },
-          ],
-        };
+        if (fn.toString().includes('querySelectorAll')) {
+          return {
+            timestamp: '2026-11-09T00:00:00.000Z',
+            transactions: [
+              {
+                date: '11/01',
+                content: 'Wrong month',
+                amount_text: '-100円',
+                account: 'Bank',
+                category_main: 'Main',
+                category_sub: 'Sub',
+                memo: '',
+                is_transfer: false,
+              },
+            ],
+          };
+        }
+        return 11; // first row is stuck in November
       });
 
       await expect(runCfScrape({ targetMonth: '2026-10' })).rejects.toThrow(
@@ -361,16 +367,57 @@ describe('cf.js', () => {
     });
 
     it('should fail loudly when the calendar never reaches the target month', async () => {
-      mockPage.waitForFunction = vi.fn().mockRejectedValue(new Error('Timeout'));
+      mockPage.waitForTimeout = vi.fn().mockResolvedValue(undefined);
       mockPage.evaluate.mockImplementation(async (fn, arg) => {
         if (arg === '.fc-header-title h2') return '2026/11/1 - 2026/11/30';
         return { timestamp: '2026-11-09T00:00:00.000Z', transactions: [] };
       });
 
       await expect(runCfScrape({ targetMonth: '2026-10' })).rejects.toThrow(
-        'Timeout'
+        /Timed out waiting for the calendar month title/
       );
       expect(console.log).not.toHaveBeenCalled();
+    });
+
+    it('should wait out a Loading... header while navigating', async () => {
+      mockPage.waitForTimeout = vi.fn().mockResolvedValue(undefined);
+      let titleReads = 0;
+      mockPage.evaluate.mockImplementation(async (fn, arg) => {
+        if (arg === '.fc-header-title h2') {
+          titleReads += 1;
+          // After the click: "Loading..." twice, then October settles.
+          if (titleReads <= 1) return '2026/11/1 - 2026/11/30';
+          if (titleReads <= 3) return 'Loading...';
+          return '2026/10/1 - 2026/10/31';
+        }
+        if (fn.toString().includes('querySelectorAll')) {
+          return {
+            timestamp: '2026-11-09T00:00:00.000Z',
+            transactions: [
+              {
+                date: '10/05',
+                content: 'Oct Tx',
+                amount_text: '-100円',
+                account: 'Bank',
+                category_main: 'Main',
+                category_sub: 'Sub',
+                memo: '',
+                is_transfer: false,
+              },
+            ],
+          };
+        }
+        return 10;
+      });
+      mockPage.click.mockResolvedValue(undefined);
+
+      await runCfScrape({ targetMonth: '2026-10' });
+
+      const prevClicks = mockPage.click.mock.calls.filter(([s]) => s.includes('fc-button-prev'));
+      expect(prevClicks.length).toBe(1);
+      expect(console.error).toHaveBeenCalledWith(
+        'Verified: all 1 transactions belong to 2026-10.'
+      );
     });
   });
 

@@ -89,15 +89,33 @@ const readMonthTitle = async (page) =>
     return el ? el.innerText.replace(/\s+/g, " ").trim() : "";
   }, TITLE_SELECTOR);
 
+const TITLE_POLL_INTERVAL_MS = 500;
+const TITLE_POLL_MAX = 60; // ~30s of polling before giving up
+
+// Polls the calendar header until it shows a real month range. While the
+// calendar re-renders, the header temporarily reads "Loading...", which must
+// never be parsed as a month. When previousTitle is given, the header must
+// also differ from it, so a not-yet-updated header does not pass either.
+const waitForDisplayedMonth = async (page, previousTitle = null) => {
+  let lastTitle = "";
+  for (let i = 0; i < TITLE_POLL_MAX; i++) {
+    lastTitle = await readMonthTitle(page);
+    const displayed = parseDisplayedMonthTitle(lastTitle);
+    if (displayed && lastTitle !== previousTitle) {
+      return { title: lastTitle, displayed };
+    }
+    await page.waitForTimeout(TITLE_POLL_INTERVAL_MS);
+  }
+  throw new Error(
+    `Timed out waiting for the calendar month title (last: "${lastTitle}")`
+  );
+};
+
 // Moves the calendar one month at a time until the header shows the target
-// month. After every click it waits until the header text actually changes,
+// month. After every click it waits until the header settles on a new month,
 // so a slow re-render can never be mistaken for the target month.
 const navigateToTargetMonth = async (page, target, logger = console) => {
-  let title = await readMonthTitle(page);
-  let displayed = parseDisplayedMonthTitle(title);
-  if (!displayed) {
-    throw new Error(`Could not read the displayed month from title "${title}"`);
-  }
+  let { title, displayed } = await waitForDisplayedMonth(page);
   let clicks = 0;
   while (monthIndex(displayed) !== monthIndex(target)) {
     if (clicks >= 24) {
@@ -112,25 +130,28 @@ const navigateToTargetMonth = async (page, target, logger = console) => {
     );
     await page.click(selector, { timeout: 30_000 });
     clicks += 1;
-    await page.waitForFunction(
-      (prevTitle) => {
-        const el = document.querySelector(".fc-header-title h2");
-        return (
-          !!el && el.innerText.replace(/\s+/g, " ").trim() !== prevTitle
-        );
-      },
-      title,
-      { timeout: 20_000 }
-    );
-    title = await readMonthTitle(page);
-    displayed = parseDisplayedMonthTitle(title);
-    if (!displayed) {
-      throw new Error(
-        `Could not read the displayed month from title "${title}"`
-      );
-    }
+    ({ title, displayed } = await waitForDisplayedMonth(page, title));
   }
   return displayed;
+};
+
+// The header can settle on the target month while the table body is still
+// re-rendering. Polls until the first row belongs to the target month (or
+// there are no rows yet). Never throws: the post-scrape validation judges
+// the final state and fails loudly if the rows are still wrong.
+const waitForRowsInMonth = async (page, target) => {
+  for (let i = 0; i < TITLE_POLL_MAX; i++) {
+    const firstMonth = await page.evaluate(() => {
+      const el = document.querySelector(
+        "#cf-detail-table tbody.list_body tr.transaction_list .date span"
+      );
+      if (!el) return null;
+      const match = el.innerText.trim().match(/^(\d{1,2})\//);
+      return match ? Number(match[1]) : null;
+    });
+    if (firstMonth === null || firstMonth === target.month) return;
+    await page.waitForTimeout(TITLE_POLL_INTERVAL_MS);
+  }
 };
 
 const runCfScrape = async ({
@@ -162,6 +183,7 @@ const runCfScrape = async ({
       await page.waitForSelector("#cf-detail-table", { timeout: 30000 });
       await navigateToTargetMonth(page, target, logger);
       await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+      await waitForRowsInMonth(page, target);
     } else if (prevMonths > 0) {
       logger.error(`Moving back ${prevMonths} month(s)...`);
       for (let i = 0; i < prevMonths; i++) {
@@ -302,4 +324,6 @@ module.exports = {
   parseTargetMonth,
   registerStealth,
   runCfScrape,
+  waitForDisplayedMonth,
+  waitForRowsInMonth,
 };
