@@ -7,6 +7,12 @@ const {
   registerStealth,
 } = require("./lib/scrape-utils");
 
+const PREV_BUTTON =
+  "button.fc-button-prev.spec-fc-button-click-attached:not(.fc-state-disabled)";
+const NEXT_BUTTON =
+  "button.fc-button-next.spec-fc-button-click-attached:not(.fc-state-disabled)";
+const TITLE_SELECTOR = ".fc-header-title h2";
+
 const normalizeCfResult = (raw) => {
   const transactions = raw.transactions
     .map((row) => {
@@ -32,12 +38,112 @@ const normalizeCfResult = (raw) => {
   };
 };
 
+// The calendar header shows the displayed range, e.g. "2026/11/1 - 2026/11/30".
+// Returns { year, month } of the range start, or null when unparsable.
+const parseDisplayedMonthTitle = (titleText) => {
+  const match = String(titleText ?? "").match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (!match) return null;
+  return { year: Number(match[1]), month: Number(match[2]) };
+};
+
+// Accepts "YYYY-MM" or { year, month }. Returns { year, month } or null.
+const parseTargetMonth = (value) => {
+  if (value == null) return null;
+  if (typeof value === "object") {
+    const year = Number(value.year);
+    const month = Number(value.month);
+    if (Number.isInteger(year) && Number.isInteger(month) && month >= 1 && month <= 12) {
+      return { year, month };
+    }
+    return null;
+  }
+  const match = String(value).match(/^(\d{4})-(\d{1,2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return { year, month };
+};
+
+const monthIndex = ({ year, month }) => year * 12 + (month - 1);
+
+const formatMonth = ({ year, month }) =>
+  `${year}-${String(month).padStart(2, "0")}`;
+
+// Returns the dates of transactions that do not belong to the target month.
+// Dates look like "09/30" or "09/30(水)".
+const findOutOfMonthTransactions = (transactions, target) => {
+  const bad = [];
+  for (const tx of transactions) {
+    const match = String(tx.date ?? "").match(/^(\d{1,2})\/(\d{1,2})/);
+    if (!match || Number(match[1]) !== target.month) {
+      bad.push(tx.date);
+    }
+  }
+  return bad;
+};
+
+const readMonthTitle = async (page) =>
+  page.evaluate((selector) => {
+    const el = document.querySelector(selector);
+    return el ? el.innerText.replace(/\s+/g, " ").trim() : "";
+  }, TITLE_SELECTOR);
+
+// Moves the calendar one month at a time until the header shows the target
+// month. After every click it waits until the header text actually changes,
+// so a slow re-render can never be mistaken for the target month.
+const navigateToTargetMonth = async (page, target, logger = console) => {
+  let title = await readMonthTitle(page);
+  let displayed = parseDisplayedMonthTitle(title);
+  if (!displayed) {
+    throw new Error(`Could not read the displayed month from title "${title}"`);
+  }
+  let clicks = 0;
+  while (monthIndex(displayed) !== monthIndex(target)) {
+    if (clicks >= 24) {
+      throw new Error(
+        `Month navigation did not reach ${formatMonth(target)} (stuck at ${formatMonth(displayed)})`
+      );
+    }
+    const selector =
+      monthIndex(displayed) > monthIndex(target) ? PREV_BUTTON : NEXT_BUTTON;
+    logger.error(
+      `Moving from ${formatMonth(displayed)} toward ${formatMonth(target)}...`
+    );
+    await page.click(selector, { timeout: 30_000 });
+    clicks += 1;
+    await page.waitForFunction(
+      (prevTitle) => {
+        const el = document.querySelector(".fc-header-title h2");
+        return (
+          !!el && el.innerText.replace(/\s+/g, " ").trim() !== prevTitle
+        );
+      },
+      title,
+      { timeout: 20_000 }
+    );
+    title = await readMonthTitle(page);
+    displayed = parseDisplayedMonthTitle(title);
+    if (!displayed) {
+      throw new Error(
+        `Could not read the displayed month from title "${title}"`
+      );
+    }
+  }
+  return displayed;
+};
+
 const runCfScrape = async ({
   prevMonths = 0,
+  targetMonth = null,
   chromiumModule = chromium,
   authPaths = getAuthPaths(),
   logger = console,
 } = {}) => {
+  const target = parseTargetMonth(targetMonth);
+  if (targetMonth != null && !target) {
+    throw new Error(`Invalid target month: ${targetMonth}`);
+  }
   registerStealth(chromiumModule);
   const browser = await chromiumModule.launch({ headless: true });
   const context = await browser.newContext(
@@ -51,7 +157,12 @@ const runCfScrape = async ({
       waitUntil: "domcontentloaded",
     });
 
-    if (prevMonths > 0) {
+    if (target) {
+      logger.error(`Target month: ${formatMonth(target)}`);
+      await page.waitForSelector("#cf-detail-table", { timeout: 30000 });
+      await navigateToTargetMonth(page, target, logger);
+      await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+    } else if (prevMonths > 0) {
       logger.error(`Moving back ${prevMonths} month(s)...`);
       for (let i = 0; i < prevMonths; i++) {
         await page.click(
@@ -69,7 +180,12 @@ const runCfScrape = async ({
     await page.waitForSelector(
       "#cf-detail-table tbody.list_body tr.transaction_list",
       { timeout: 30000 }
-    );
+    ).catch(() => {
+      // A verified month may legitimately have no transactions; the scrape
+      // below then yields an empty list. Other modes keep the old strictness
+      // only when rows exist, which the scrape itself establishes.
+      if (!target) throw new Error("Transaction rows did not appear");
+    });
 
     const rawResult = await page.evaluate(() => {
       const text = (node) => node?.innerText ?? "";
@@ -102,12 +218,33 @@ const runCfScrape = async ({
 
     const result = normalizeCfResult(rawResult);
 
+    if (target) {
+      const bad = findOutOfMonthTransactions(result.transactions, target);
+      if (bad.length > 0) {
+        throw new Error(
+          `Transactions outside ${formatMonth(target)} found: ${bad.slice(0, 5).join(", ")}`
+        );
+      }
+      logger.error(
+        `Verified: all ${result.transactions.length} transactions belong to ${formatMonth(target)}.`
+      );
+    }
+
     logger.log(JSON.stringify(result, null, 2));
     logger.error(
       `Scraping complete: Extracted ${result.transactions.length} transactions.`
     );
 
-    if (prevMonths > 0) {
+    if (target) {
+      // Best effort: leave the calendar on the current month, like the
+      // legacy -p flow did.
+      try {
+        await page.click(".fc-button-today");
+        await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+      } catch {
+        // Returning to today is cosmetic; never fail a verified scrape.
+      }
+    } else if (prevMonths > 0) {
       logger.error("Returning to current month...");
       await page.click(".fc-button-today");
       await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
@@ -116,26 +253,40 @@ const runCfScrape = async ({
 
   } catch (error) {
     logger.error("An error occurred:", error);
-    await page.screenshot({ path: "cf-error.png" });
+    await page.screenshot({ path: "cf-error.png" }).catch(() => {});
+    if (target) {
+      // In target-month mode a failure must be loud: never let a wrong or
+      // partial month flow into the caller's output as if it succeeded.
+      throw error;
+    }
   } finally {
     await browser.close();
   }
 };
 
-/* c8 ignore next 17 */
+/* c8 ignore next 25 */
 if (require.main === module) {
   const args = process.argv.slice(2);
-  let prevMonths = 0;
+  let targetMonth = null;
   for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--month" && args[i + 1]) {
+      targetMonth = args[i + 1];
+      break;
+    }
     if (args[i] === "-p" && args[i + 1]) {
       const val = parseInt(args[i + 1], 10);
       if (!isNaN(val)) {
-        prevMonths = val;
+        const now = new Date();
+        const shifted = new Date(now.getFullYear(), now.getMonth() - val, 1);
+        targetMonth = formatMonth({
+          year: shifted.getFullYear(),
+          month: shifted.getMonth() + 1,
+        });
       }
       break;
     }
   }
-  runCfScrape({ prevMonths }).catch((err) => {
+  runCfScrape({ targetMonth }).catch((err) => {
     console.error(err);
     process.exit(1);
   });
@@ -143,8 +294,12 @@ if (require.main === module) {
 
 module.exports = {
   buildContextOptions,
+  findOutOfMonthTransactions,
   getAuthPaths,
+  navigateToTargetMonth,
   normalizeCfResult,
+  parseDisplayedMonthTitle,
+  parseTargetMonth,
   registerStealth,
   runCfScrape,
 };

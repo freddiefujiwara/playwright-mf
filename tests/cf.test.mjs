@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getAuthPaths, registerStealth, runCfScrape, normalizeCfResult } from '../cf.js';
+import { getAuthPaths, registerStealth, runCfScrape, normalizeCfResult, parseDisplayedMonthTitle, parseTargetMonth, findOutOfMonthTransactions } from '../cf.js';
 // Import the actual chromium object to spy on it
 import { chromium } from 'playwright-extra';
 import path from 'path';
@@ -292,6 +292,127 @@ describe('cf.js', () => {
 
       expect(console.error).toHaveBeenCalledWith('Moving back 2 month(s)...');
       expect(console.error).toHaveBeenCalledWith('Returning to current month...');
+    });
+
+    it('should navigate to a target month and verify the rows', async () => {
+      mockPage.waitForFunction = vi.fn().mockResolvedValue(undefined);
+      let title = '2026/11/1 - 2026/11/30';
+      mockPage.evaluate.mockImplementation(async (fn, arg) => {
+        if (arg === '.fc-header-title h2') return title;
+        return {
+          timestamp: '2026-11-09T00:00:00.000Z',
+          transactions: [
+            {
+              date: '10/05',
+              content: 'Oct Tx',
+              amount_text: '-100円',
+              account: 'Bank',
+              category_main: 'Main',
+              category_sub: 'Sub',
+              memo: '',
+              is_transfer: false,
+            },
+          ],
+        };
+      });
+      mockPage.click.mockImplementation(async (selector) => {
+        if (selector.includes('fc-button-prev')) {
+          title = '2026/10/1 - 2026/10/31';
+        }
+      });
+
+      await runCfScrape({ targetMonth: '2026-10' });
+
+      const prevClicks = mockPage.click.mock.calls.filter(([s]) => s.includes('fc-button-prev'));
+      expect(prevClicks.length).toBe(1);
+      const logged = JSON.parse(console.log.mock.calls[0][0]);
+      expect(logged.transactions.length).toBe(1);
+      expect(logged.transactions[0].date).toBe('10/05');
+      expect(console.error).toHaveBeenCalledWith(
+        'Verified: all 1 transactions belong to 2026-10.'
+      );
+    });
+
+    it('should fail loudly when rows fall outside the target month', async () => {
+      mockPage.waitForFunction = vi.fn().mockResolvedValue(undefined);
+      mockPage.evaluate.mockImplementation(async (fn, arg) => {
+        if (arg === '.fc-header-title h2') return '2026/10/1 - 2026/10/31';
+        return {
+          timestamp: '2026-11-09T00:00:00.000Z',
+          transactions: [
+            {
+              date: '11/01',
+              content: 'Wrong month',
+              amount_text: '-100円',
+              account: 'Bank',
+              category_main: 'Main',
+              category_sub: 'Sub',
+              memo: '',
+              is_transfer: false,
+            },
+          ],
+        };
+      });
+
+      await expect(runCfScrape({ targetMonth: '2026-10' })).rejects.toThrow(
+        /outside 2026-10/
+      );
+      expect(console.log).not.toHaveBeenCalled();
+    });
+
+    it('should fail loudly when the calendar never reaches the target month', async () => {
+      mockPage.waitForFunction = vi.fn().mockRejectedValue(new Error('Timeout'));
+      mockPage.evaluate.mockImplementation(async (fn, arg) => {
+        if (arg === '.fc-header-title h2') return '2026/11/1 - 2026/11/30';
+        return { timestamp: '2026-11-09T00:00:00.000Z', transactions: [] };
+      });
+
+      await expect(runCfScrape({ targetMonth: '2026-10' })).rejects.toThrow(
+        'Timeout'
+      );
+      expect(console.log).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('parseDisplayedMonthTitle', () => {
+    it('parses the range start', () => {
+      expect(parseDisplayedMonthTitle('2026/11/1 - 2026/11/30')).toEqual({ year: 2026, month: 11 });
+      expect(parseDisplayedMonthTitle('2026/9/1 - 2026/9/30')).toEqual({ year: 2026, month: 9 });
+    });
+
+    it('returns null for unrelated text', () => {
+      expect(parseDisplayedMonthTitle('2026年11月9日')).toBeNull();
+      expect(parseDisplayedMonthTitle('')).toBeNull();
+      expect(parseDisplayedMonthTitle(undefined)).toBeNull();
+    });
+  });
+
+  describe('parseTargetMonth', () => {
+    it('parses YYYY-MM strings', () => {
+      expect(parseTargetMonth('2026-09')).toEqual({ year: 2026, month: 9 });
+      expect(parseTargetMonth('2026-12')).toEqual({ year: 2026, month: 12 });
+    });
+
+    it('accepts { year, month } objects', () => {
+      expect(parseTargetMonth({ year: 2026, month: 9 })).toEqual({ year: 2026, month: 9 });
+    });
+
+    it('rejects invalid values', () => {
+      expect(parseTargetMonth('2026-13')).toBeNull();
+      expect(parseTargetMonth('2026/09')).toBeNull();
+      expect(parseTargetMonth(null)).toBeNull();
+    });
+  });
+
+  describe('findOutOfMonthTransactions', () => {
+    it('returns an empty list when every row belongs to the month', () => {
+      const txs = [{ date: '09/01' }, { date: '09/30(水)' }];
+      expect(findOutOfMonthTransactions(txs, { year: 2026, month: 9 })).toEqual([]);
+    });
+
+    it('returns the offending dates', () => {
+      const txs = [{ date: '09/01' }, { date: '08/31(月)' }, { date: '10/01' }];
+      expect(findOutOfMonthTransactions(txs, { year: 2026, month: 9 })).toEqual(['08/31(月)', '10/01']);
     });
   });
 });
