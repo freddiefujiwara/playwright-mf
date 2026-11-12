@@ -1,8 +1,7 @@
 {
-  "name": "playwrite-mf",
+  "name": "playwright-mf",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
   "dependencies": {
     "playwright": "^1.58.0",
     "playwright-core": "^1.58.0",
@@ -19,14 +18,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/freddiefujiwara/playwrite-mf.git"
+    "url": "git+https://github.com/freddiefujiwara/playwright-mf.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/freddiefujiwara/playwrite-mf/issues"
+    "url": "https://github.com/freddiefujiwara/playwright-mf/issues"
   },
-  "homepage": "https://github.com/freddiefujiwara/playwrite-mf#readme"
+  "homepage": "https://github.com/freddiefujiwara/playwright-mf#readme"
 }

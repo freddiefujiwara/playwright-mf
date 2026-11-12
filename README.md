@@ -193,13 +193,13 @@ What happens:
 - It reads the transaction table for the current month.
 - It prints a JSON result to **stdout**.
 
-You can also specify `-p <n>` to move back `n` months before extraction:
+You can also specify a target month with `--month YYYY-MM`:
 
 ```bash
-node cf.js -p 1
+node cf.js --month 2026-01
 ```
 
-This will click the "Previous" button `n` times before extracting data, and then return to the current month by clicking the "Today" button.
+The script navigates the calendar directly to the specified month and verifies that the displayed month and the transaction dates match it before extracting data. If the target month cannot be verified, the script exits with an error instead of returning data for the wrong month.
 
 Example output shape:
 ```json
