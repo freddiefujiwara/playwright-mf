@@ -254,7 +254,7 @@ describe("runPortfolioScrape", () => {
     expect(browser.close).toHaveBeenCalled();
   });
 
-  it("should handle asset class ratio fallback and missing summary table", async () => {
+  it("should not evaluate a non-JSON asset class ratio literal", async () => {
     const html = `
       <section id="portfolio_det_cash">
         <h1 class="heading-normal">現金</h1>
@@ -301,7 +301,9 @@ describe("runPortfolioScrape", () => {
 
     const logged = JSON.parse(logger.log.mock.calls[0][0]);
     expect(logged.breakdown).toEqual([]);
-    expect(logged.assetClassRatio).toEqual([{ name: "現金", ratio: 10 }]);
+    // The literal uses unquoted keys, so it is not JSON. It must not be
+    // evaluated as code; the run simply reports no ratio.
+    expect(logged.assetClassRatio).toEqual(null);
     expect(browser.close).toHaveBeenCalled();
   });
 
