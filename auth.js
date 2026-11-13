@@ -11,7 +11,15 @@ const persistAuthState = async ({
 } = {}) => {
   try {
     fsModule.mkdirSync(authDir, { recursive: true });
+    // auth.json holds live MoneyForward session cookies; do not leave
+    // its permissions to the process umask.
+    if (typeof fsModule.chmodSync === "function") {
+      fsModule.chmodSync(authDir, 0o700);
+    }
     await context.storageState({ path: authPath });
+    if (typeof fsModule.chmodSync === "function") {
+      fsModule.chmodSync(authPath, 0o600);
+    }
     logger.log(`Saved authentication data: ${authPath}`);
   } catch (err) {
     logger.error("Failed to save auth.json:", err);

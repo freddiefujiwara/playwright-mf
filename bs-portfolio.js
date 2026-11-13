@@ -120,7 +120,10 @@ const runPortfolioScrape = async ({
             try {
               return JSON.parse(m[1]);
             } catch {
-              return Function(`return (${m[1]})`)();
+              // Never evaluate scraped page text (the old Function()
+              // fallback did exactly that). A non-JSON literal simply
+              // means this run has no breakdown to report.
+              return null;
             }
           }
         }

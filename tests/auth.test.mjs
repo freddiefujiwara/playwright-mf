@@ -19,7 +19,7 @@ describe("auth helpers", () => {
 
   it("persists auth state with expected path", async () => {
     const context = { storageState: vi.fn().mockResolvedValue(undefined) };
-    const fsModule = { mkdirSync: vi.fn() };
+    const fsModule = { mkdirSync: vi.fn(), chmodSync: vi.fn() };
     const logger = { log: vi.fn(), error: vi.fn() };
 
     await persistAuthState({
@@ -36,6 +36,9 @@ describe("auth helpers", () => {
     expect(context.storageState).toHaveBeenCalledWith({
       path: "/tmp/auth/auth.json",
     });
+    // The session file and its directory are owner-only.
+    expect(fsModule.chmodSync).toHaveBeenCalledWith("/tmp/auth", 0o700);
+    expect(fsModule.chmodSync).toHaveBeenCalledWith("/tmp/auth/auth.json", 0o600);
     expect(logger.log).toHaveBeenCalledWith(
       "Saved authentication data: /tmp/auth/auth.json"
     );
