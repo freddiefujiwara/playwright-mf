@@ -38,12 +38,23 @@ const normalizeCfResult = (raw) => {
   };
 };
 
+const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
+
 // The calendar header shows the displayed range, e.g. "2026/11/1 - 2026/11/30".
 // Returns { year, month } of the range start, or null when unparsable.
+// The range start must be a real date: a garbled header such as
+// "2026/13/1" or "2026/02/30" must never be read as a month (month 13
+// would even alias to January of the next year in monthIndex terms).
 const parseDisplayedMonthTitle = (titleText) => {
   const match = String(titleText ?? "").match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
   if (!match) return null;
-  return { year: Number(match[1]), month: Number(match[2]) };
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) {
+    return null;
+  }
+  return { year, month };
 };
 
 // Accepts "YYYY-MM" or { year, month }. Returns { year, month } or null.
@@ -71,12 +82,20 @@ const formatMonth = ({ year, month }) =>
   `${year}-${String(month).padStart(2, "0")}`;
 
 // Returns the dates of transactions that do not belong to the target month.
-// Dates look like "09/30" or "09/30(水)".
+// Dates look like "09/30" or "09/30(水)". A date whose day does not exist
+// in the target month (e.g. "02/30", "09/31", "09/00") is not a date of
+// that month either and must fail verification, never flow downstream.
 const findOutOfMonthTransactions = (transactions, target) => {
   const bad = [];
+  const maxDay = daysInMonth(target.year, target.month);
   for (const tx of transactions) {
     const match = String(tx.date ?? "").match(/^(\d{1,2})\/(\d{1,2})/);
-    if (!match || Number(match[1]) !== target.month) {
+    if (
+      !match ||
+      Number(match[1]) !== target.month ||
+      Number(match[2]) < 1 ||
+      Number(match[2]) > maxDay
+    ) {
       bad.push(tx.date);
     }
   }
