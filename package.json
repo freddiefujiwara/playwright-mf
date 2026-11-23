@@ -1,7 +1,8 @@
 {
   "name": "playwright-mf",
   "version": "1.0.0",
-  "description": "",
+  "private": true,
+  "description": "Playwright scripts that fetch Money Forward ME data and publish household cash-flow feeds.",
   "dependencies": {
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
@@ -11,7 +12,6 @@
     "fast-check": "^4.10.3",
     "jsdom": "^31.0.0",
     "playwright": "^1.65.0",
-    "playwright-core": "^1.65.0",
     "vitest": "^5.1.0"
   },
   "scripts": {
@@ -21,8 +21,6 @@
     "type": "git",
     "url": "git+https://github.com/freddiefujiwara/playwright-mf.git"
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
