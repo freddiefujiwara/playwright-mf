@@ -1,8 +1,8 @@
 const { chromium } = require("playwright-extra");
 const stealth = require("puppeteer-extra-plugin-stealth")();
 const {
+  normalizeBreakdownRows,
   normalizeWhitespace,
-  parsePercent,
   parseTableData,
   parseYen,
   pickFirst,
@@ -12,21 +12,7 @@ const {
 } = require("./lib/scrape-utils");
 
 const normalizePortfolioResult = (raw) => {
-  const breakdown = raw.breakdown
-    .map((row) => {
-      const category = normalizeWhitespace(row.category);
-      if (!category) return null;
-      const amountText = normalizeWhitespace(row.amount_text);
-      const percentageText = normalizeWhitespace(row.percentage_text);
-      return {
-        category,
-        amount_text: amountText,
-        amount_yen: parseYen(amountText),
-        percentage_text: percentageText,
-        percentage: parsePercent(percentageText),
-      };
-    })
-    .filter(Boolean);
+  const breakdown = normalizeBreakdownRows(raw.breakdown);
 
   const details = raw.details.map((detail) => {
     const category = normalizeWhitespace(detail.category);
